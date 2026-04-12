@@ -1,0 +1,244 @@
+/* Sidebar visual design for PEKPPP
+   - Namespaced under .pekppp-ui
+   - Uses modern government dashboard aesthetic: navy gradient, soft rounded menu items
+   - No inline styles; partial contains only HTML + classes
+*/
+
+.pekppp-ui .pekppp-sidebar {
+  --sidebar-width: 280px;
+  width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #071020 0%, #0b2035 100%); /* navy gradient */
+  color: #cfe3f6;
+  box-shadow: 0 2px 12px rgba(3,10,18,0.35);
+  box-sizing: border-box;
+}
+
+/* Brand header */
+.pekppp-ui .sidebar-inner { display:flex; flex-direction:column; height:100%; }
+.pekppp-ui .sidebar-brand {
+  display:flex;
+  gap:14px;
+  align-items:center;
+  padding:18px 16px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+/* Redesigned logo badge */
+.pekppp-ui .brand-logo-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.pekppp-ui .brand-logo-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 0;
+  object-fit: contain;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  display: block;
+}
+
+/* ensure the anchor wraps logo + text and aligns them horizontally */
+.pekppp-ui .brand-link { display:flex; align-items:center; gap:14px; text-decoration:none; flex: 1; }
+
+.pekppp-ui .brand-text {
+  display:flex;
+  flex-direction:column;
+  line-height:1;
+  height:56px;
+  justify-content:center;
+  min-width: 0;
+}
+.pekppp-ui .brand-text .title { color:#e6f0fb; font-weight:700; font-size:1.15rem; letter-spacing:0.2px; margin:0; }
+.pekppp-ui .brand-text .subtitle { color:rgba(206,227,246,0.9); font-size:0.9rem; margin:0; margin-top:3px; }
+
+/* Nav area */
+.pekppp-ui .sidebar-nav { 
+  padding:12px 12px; 
+  overflow-y:auto !important; 
+  overflow-x:hidden !important;
+  flex:1;
+  /* Hide scrollbar but keep scrolling functional */
+  -ms-overflow-style: none !important;  /* IE and Edge */
+  scrollbar-width: none !important;     /* Firefox */
+}
+
+/* Webkit browsers (Chrome, Safari, Opera, Edge) */
+.pekppp-ui .sidebar-nav::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.pekppp-ui .sidebar-nav::-webkit-scrollbar-track {
+  display: none !important;
+}
+
+.pekppp-ui .sidebar-nav::-webkit-scrollbar-thumb {
+  display: none !important;
+}
+.pekppp-ui .nav-section { margin-top:6px; margin-bottom:14px; }
+.pekppp-ui .nav-section:first-child { margin-top: 0; }
+
+/* Accordion section styling */
+.pekppp-ui .nav-section.accordion-section {
+  margin-bottom: 0;
+}
+
+/* Accordion toggle button */
+.pekppp-ui .accordion-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: rgba(206,227,246,0.7);
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 160ms ease;
+  margin: 16px 6px 0px 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(206,227,246,0.1);
+  padding-left: 8px;
+}
+
+.pekppp-ui .accordion-toggle:hover {
+  color: rgba(206,227,246,1);
+}
+
+.pekppp-ui .accordion-content {
+  flex: 1;
+  text-align: left;
+}
+
+.pekppp-ui .accordion-arrow {
+  width: 16px;
+  height: 16px;
+  margin-left: 8px;
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+}
+
+/* Arrow rotates when expanded */
+.pekppp-ui .nav-section.accordion-section.expanded .accordion-arrow {
+  transform: rotate(180deg);
+}
+
+/* Accordion items container */
+.pekppp-ui .accordion-items {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 300ms ease;
+}
+
+.pekppp-ui .nav-section.accordion-section.expanded .accordion-items {
+  max-height: 500px;
+}
+
+/* Nested nav items styling */
+.pekppp-ui .accordion-items .nav-item {
+  padding-left: 32px;
+  font-weight: 500;
+  font-size: 0.94rem;
+}
+
+.pekppp-ui .nav-section-title { 
+  display:block; 
+  font-size:11px; 
+  font-weight:700;
+  text-transform:uppercase; 
+  color:rgba(206,227,246,0.7); 
+  margin:16px 6px 10px 6px; 
+  padding-left:8px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(206,227,246,0.1);
+  padding-bottom: 8px;
+}
+
+/* Menu item */
+.pekppp-ui .nav-item {
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:12px 12px;
+  border-radius:12px; /* rounded-lg feel */
+  color:rgba(230,240,251,0.95);
+  text-decoration:none;
+  font-weight:600;
+  transition:background-color 160ms ease, transform 120ms ease;
+}
+.pekppp-ui .nav-item .icon { 
+  width:24px; 
+  height:24px; 
+  display:inline-flex; 
+  align-items:center; 
+  justify-content:center; 
+  font-size:1.2rem;
+  flex-shrink: 0;
+}
+.pekppp-ui .nav-item .label { font-size:0.98rem; }
+
+.pekppp-ui .nav-item:hover {
+  background: rgba(255,255,255,0.02);
+  transform:translateY(-1px);
+}
+
+.pekppp-ui .nav-item.active {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+  box-shadow: 0 10px 30px rgba(2,6,23,0.28), inset 0 0 0 1px rgba(255,255,255,0.035);
+  color:#fff;
+  position:relative;
+}
+
+/* subtle left accent for active item */
+.pekppp-ui .nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 60%;
+  background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+  border-radius: 2px;
+}
+
+/* Icon weight: use stroke/outline icons with slightly thicker strokes if available */
+.pekppp-ui .nav-item svg { width:20px; height:20px; stroke-width:1.6; }
+
+/* Footer */
+.pekppp-ui .sidebar-footer { padding:14px 20px; color:rgba(206,227,246,0.6); font-size:12px; border-top:1px solid rgba(255,255,255,0.02); }
+
+/* Collapsed behavior preserved but polished */
+.pekppp-ui .pekppp-sidebar.collapsed { width:84px; }
+.pekppp-ui .pekppp-sidebar.collapsed .brand-text { display:none; }
+.pekppp-ui .pekppp-sidebar.collapsed .label { display:none; }
+.pekppp-ui .pekppp-sidebar.collapsed .nav-item { justify-content:center; padding:12px 8px; }
+
+/* when collapsed give the brand area a little left padding and reduce logo size slightly */
+.pekppp-ui .pekppp-sidebar.collapsed .sidebar-brand { padding-left:12px; padding-right:12px; }
+.pekppp-ui .pekppp-sidebar.collapsed .brand-logo { width:46px; height:46px; margin-left:6px; }
+
+/* Accessibility: focus-visible */
+.pekppp-ui .nav-item:focus-visible { outline:2px solid rgba(255,255,255,0.06); outline-offset:3px; }
+
+/* Small screens: keep behavior consistent */
+@media (max-width: 768px) {
+  .pekppp-ui .pekppp-sidebar { position:fixed; z-index:50; left:0; top:0; bottom:0; transform:translateX(-100%); transition:transform 220ms ease; }
+  .pekppp-ui .pekppp-sidebar.open { transform:translateX(0); }
+}

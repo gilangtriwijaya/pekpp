@@ -1,0 +1,13 @@
+@extends('layouts.app')
+
+@section('content')
+<x-panel>
+    <div class="py-6">
+        <h2 class="text-lg font-semibold">Halaman ini dinonaktifkan</h2>
+        <p class="mt-2 text-sm text-gray-600">Form Periode sekarang tersedia sebagai modal pada halaman daftar Periode. Kembali ke daftar untuk membuat atau mengedit periode.</p>
+        <div class="mt-4">
+            <a href="{{ route('admin.periode.index') }}" class="btn btn-secondary">Kembali ke Daftar Periode</a>
+        </div>
+    </div>
+</x-panel>
+@endsection
