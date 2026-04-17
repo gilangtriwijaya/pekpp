@@ -35,15 +35,20 @@ Route::get('/session-expired', function () {
 
 
 Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
+    // Analytics UI
+    Route::get('/analytics', function () {
+        return view('analytics.index');
+    })->name('analytics.index');
+
     // Error Gallery Demo (temporary - for video recording)
     Route::get('/errors', [\App\Http\Controllers\DemoErrorController::class, 'index'])->name('errors.index');
-    
+
     // Activity Logs: Superadmin only
     Route::middleware([\App\Http\Middleware\RequireSuperadmin::class])->group(function () {
         Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity-logs.index');
         Route::get('/activity-logs/{id}', [ActivityLogController::class, 'show'])->name('activity-logs.show');
     });
-    
+
     // UPP listing (read-only)
     Route::get('/upps', [\App\Http\Controllers\UppController::class, 'index'])->name('upps.index');
 
@@ -55,7 +60,7 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
         Route::get('/admin/user-upp/{id}/edit', [\App\Http\Controllers\UserUppController::class, 'edit'])->name('admin.user_upp.edit');
         Route::put('/admin/user-upp/{id}', [\App\Http\Controllers\UserUppController::class, 'update'])->name('admin.user_upp.update');
         Route::delete('/admin/user-upp/{id}', [\App\Http\Controllers\UserUppController::class, 'destroy'])->name('admin.user_upp.destroy');
-        
+
             // Duplicate routes without the `/admin` prefix so the menu can link to `/user-upp`
             Route::get('/user-upp', [\App\Http\Controllers\UserUppController::class, 'index'])->name('user_upp.index');
             Route::get('/user-upp/create', [\App\Http\Controllers\UserUppController::class, 'create'])->name('user_upp.create');
@@ -70,7 +75,7 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
         Route::resource('pertanyaan', \App\Http\Controllers\F01PertanyaanController::class);
         Route::post('pertanyaan/reorder', [\App\Http\Controllers\F01PertanyaanController::class, 'reorder'])->name('pertanyaan.reorder');
         Route::get('get-indicators-by-aspek/{aspekId}', [\App\Http\Controllers\F01PertanyaanController::class, 'getIndicatorsByAspek'])->name('get-indicators-by-aspek');
-        
+
         // Aspek management
         Route::get('aspek', [\App\Http\Controllers\F01AspekController::class, 'index'])->name('aspek.index');
         Route::post('aspek', [\App\Http\Controllers\F01AspekController::class, 'store'])->name('aspek.store');
@@ -78,7 +83,7 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
         Route::delete('aspek/{aspek}', [\App\Http\Controllers\F01AspekController::class, 'destroy'])->name('aspek.destroy');
         Route::post('aspek/{aspek}/toggle', [\App\Http\Controllers\F01AspekController::class, 'toggleActive'])->name('aspek.toggle');
         Route::post('aspek/reorder', [\App\Http\Controllers\F01AspekController::class, 'reorder'])->name('aspek.reorder');
-        
+
         // Indikator management
         Route::post('indikator/reorder', [\App\Http\Controllers\F01IndikatorController::class, 'reorder'])->name('indikator.reorder');
         Route::get('indikator', [\App\Http\Controllers\F01IndikatorController::class, 'index'])->name('indikator.index');
@@ -92,7 +97,7 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
     Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () {
         Route::resource('periode', \App\Http\Controllers\PeriodeController::class);
         Route::post('periode/{periode}/toggle-aktif', [\App\Http\Controllers\PeriodeController::class, 'toggleAktif'])->name('periode.toggle-aktif');
-        
+
         // F03 Admin Management
         Route::prefix('f03')->name('f03.')->group(function () {
             // Aspek management
@@ -100,13 +105,13 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
             Route::post('aspek', [\App\Http\Controllers\F03AspekController::class, 'store'])->name('aspek.store');
             Route::put('aspek/{id}', [\App\Http\Controllers\F03AspekController::class, 'update'])->name('aspek.update');
             Route::delete('aspek/{id}', [\App\Http\Controllers\F03AspekController::class, 'destroy'])->name('aspek.destroy');
-            
+
             // Indikator management
             Route::get('indikator', [\App\Http\Controllers\F03IndikatorController::class, 'index'])->name('indikator.index');
             Route::post('indikator', [\App\Http\Controllers\F03IndikatorController::class, 'store'])->name('indikator.store');
             Route::put('indikator/{id}', [\App\Http\Controllers\F03IndikatorController::class, 'update'])->name('indikator.update');
             Route::delete('indikator/{id}', [\App\Http\Controllers\F03IndikatorController::class, 'destroy'])->name('indikator.destroy');
-            
+
             // Token management
             Route::get('token', [\App\Http\Controllers\F03TokenController::class, 'index'])->name('token.index');
             Route::post('token/generate', [\App\Http\Controllers\F03TokenController::class, 'generateToken'])->name('token.generate');
@@ -115,7 +120,7 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
             Route::post('token/{id}/activate', [\App\Http\Controllers\F03TokenController::class, 'activate'])->name('token.activate');
             Route::post('token/{id}/settings', [\App\Http\Controllers\F03TokenController::class, 'updateSettings'])->name('token.updateSettings');
             Route::get('token/{id}', [\App\Http\Controllers\F03TokenController::class, 'show'])->name('token.show');
-            
+
             // Dashboard
             Route::get('dashboard', [\App\Http\Controllers\F03DashboardController::class, 'adminDashboard'])->name('dashboard.admin');
         });
@@ -130,10 +135,10 @@ Route::post('/f03/public/{token}/submit', [\App\Http\Controllers\F03PublicContro
 Route::middleware(['auth'])->group(function () {
     // F03 UPP Dashboard redirect (for users - redirects to their UPP's dashboard)
     Route::get('/f03/dashboard', [\App\Http\Controllers\F03DashboardController::class, 'userDashboard'])->name('f03.dashboard');
-    
+
     // F03 UPP Dashboard (for each UPP's responses)
     Route::get('/f03/dashboard/upp/{uppId}/{periodeId}', [\App\Http\Controllers\F03DashboardController::class, 'uppDashboard'])->name('f03.dashboard.upp');
-    
+
     // F03 Dashboard API
     Route::get('/f03/api/response/{pengisianId}', [\App\Http\Controllers\F03DashboardController::class, 'getResponseDetail'])->name('f03.api.response');
     Route::post('/f03/api/qr-code/{tokenId}', [\App\Http\Controllers\F03DashboardController::class, 'generateQrCodeApi'])->name('f03.api.qr-code');
@@ -148,36 +153,36 @@ Route::middleware(['auth'])->group(function() {
         Route::post('/api/impersonate/stop', 'stopImpersonate')->name('api.impersonate.stop');
         Route::get('/api/impersonate/status', 'checkImpersonateStatus')->name('api.impersonate.status');
     });
-    
+
     Route::get('/f01', [\App\Http\Controllers\F01PengisianController::class, 'index'])->name('f01.index');
     Route::get('/f01/{pengisian}/aspek', [\App\Http\Controllers\F01PengisianController::class, 'aspekList'])->name('f01.aspek-list')->where('pengisian', '[0-9]+');
     Route::post('/f01/{pengisian}/finalize', [\App\Http\Controllers\F01PengisianController::class, 'finalize'])->name('f01.finalize')->where('pengisian', '[0-9]+');
     Route::post('/f01/{pengision}/auto-save', [\App\Http\Controllers\F01PengisianController::class, 'autoSave'])->name('f01.auto-save')->where('pengision', '[0-9]+');
-    
+
     // F01 Indikator Bukti Dukung (URL Link) routes - MUST be before {pengisian} catch-all
     Route::post('/f01/{pengisianId}/indikator/{indikatorId}/bukti', [\App\Http\Controllers\F01PengisianController::class, 'saveBukti'])->name('f01.indikator.bukti.save')->where(['pengisianId' => '[0-9]+', 'indikatorId' => '[0-9]+']);
     Route::get('/f01/{pengisianId}/indikator/{indikatorId}/bukti', [\App\Http\Controllers\F01PengisianController::class, 'getBukti'])->name('f01.indikator.bukti.get')->where(['pengisianId' => '[0-9]+', 'indikatorId' => '[0-9]+']);
     Route::delete('/f01/{pengisianId}/bukti/{buktiId}', [\App\Http\Controllers\F01PengisianController::class, 'deleteBukti'])->name('f01.indikator.bukti.delete')->where(['pengisianId' => '[0-9]+', 'buktiId' => '[0-9]+']);
-    
+
     // F01 Per-Aspek Save routes (Phase 14)
     Route::post('/f01/{pengisianId}/aspek/{aspekId}/save', [\App\Http\Controllers\F01PengisianController::class, 'saveBuktiDanJawaban'])->name('f01.aspek.save')->where(['pengisianId' => '[0-9]+', 'aspekId' => '[0-9]+']);
     Route::get('/f01/{pengisianId}/aspek/{aspekId}/detail', [\App\Http\Controllers\F01PengisianController::class, 'showAspekDetail'])->name('f01.aspek.detail')->where(['pengisianId' => '[0-9]+', 'aspekId' => '[0-9]+']);
     Route::get('/f01/{pengisianId}/aspek-status', [\App\Http\Controllers\F01PengisianController::class, 'getAspekStatus'])->name('f01.aspek.status')->where('pengisianId', '[0-9]+');
     Route::get('/api/f01/{pengisianId}/aspek-list-modal', [\App\Http\Controllers\F01PengisianController::class, 'getAspekListForModal'])->name('f01.api.aspek-list-modal')->where('pengisianId', '[0-9]+');
     Route::get('/api/f01/{pengisianId}/indikator/{indikatorId}', [\App\Http\Controllers\F01PengisianController::class, 'getIndikatorDetail'])->name('f01.api.indikator-detail')->where(['pengisianId' => '[0-9]+', 'indikatorId' => '[0-9]+']);
-    
+
     // F01 Jawaban dan Bukti routes
     Route::post('/f01/jawaban', [\App\Http\Controllers\F01JawabanController::class, 'storeOrUpdate'])->name('f01.jawaban.store');
     Route::post('/f01/jawaban/bulk', [\App\Http\Controllers\F01JawabanController::class, 'bulkSave'])->name('f01.jawaban.bulk');
     Route::post('/f01/bukti', [\App\Http\Controllers\F01BuktiController::class, 'store'])->name('f01.bukti.store');
     Route::delete('/f01/bukti/{id}', [\App\Http\Controllers\F01BuktiController::class, 'destroy'])->name('f01.bukti.destroy');
-    
+
     // Generic F01 Pengisian routes - MUST be after specific routes
     Route::get('/f01/{pengisian}', [\App\Http\Controllers\F01PengisianController::class, 'show'])->name('f01.show')->where('pengisian', '[0-9]+');
     Route::get('/api/f01/{id}', [\App\Http\Controllers\F01PengisianController::class, 'getFormData'])->name('f01.api.form')->where('id', '[0-9]+');
     Route::get('/api/f01/{id}/ringkasan', [\App\Http\Controllers\F01PengisianController::class, 'getRingkasan'])->name('f01.api.ringkasan')->where('id', '[0-9]+');
     Route::post('/f01/{pengisian}/submit', [\App\Http\Controllers\F01PengisianController::class, 'submit'])->name('f01.submit')->where('pengisian', '[0-9]+');
-    
+
     // F02 Validasi routes
     Route::get('/f02', [\App\Http\Controllers\F02ValidasiController::class, 'index'])->name('f02.index');
     Route::get('/f02/export/progress', [\App\Http\Controllers\F02ValidasiController::class, 'exportProgressReport'])->name('f02.export.progress');
@@ -185,25 +190,25 @@ Route::middleware(['auth'])->group(function() {
     Route::post('/f02/{id}/save', [\App\Http\Controllers\F02ValidasiController::class, 'save'])->name('f02.save')->where('id', '[0-9]+');
     Route::post('/f02/{id}/finalize', [\App\Http\Controllers\F02ValidasiController::class, 'finalize'])->name('f02.finalize')->where('id', '[0-9]+');
     Route::post('/f02/{id}/reject', [\App\Http\Controllers\F02ValidasiController::class, 'reject'])->name('f02.reject')->where('id', '[0-9]+');
-    
+
     // F02 Validasi - New aspek-grouped flow
     Route::get('/f02/{validasi}/aspek-list', [\App\Http\Controllers\F02ValidasiController::class, 'aspekList'])->name('f02.aspek-list')->where('validasi', '[0-9]+');
     Route::get('/f02/{validasi}/validasi-detail/{aspek}', [\App\Http\Controllers\F02ValidasiController::class, 'validasiDetail'])->name('f02.validasi-detail')->where(['validasi' => '[0-9]+', 'aspek' => '[0-9]+']);
     Route::post('/api/f02/{validasi}/auto-save/{indikator}', [\App\Http\Controllers\F02ValidasiController::class, 'autoSave'])->name('f02.auto-save')->where(['validasi' => '[0-9]+', 'indikator' => '[0-9]+']);
     Route::post('/f02/{validasi}/finalize-validation', [\App\Http\Controllers\F02ValidasiController::class, 'finalizeValidation'])->name('f02.finalize-validation')->where('validasi', '[0-9]+');
     Route::post('/f02/{validasi}/save-indikator/{indikator}', [\App\Http\Controllers\F02ValidasiController::class, 'saveIndikator'])->name('f02.save-indikator')->where(['validasi' => '[0-9]+', 'indikator' => '[0-9]+']);
-    
+
     // F02 Resubmit versioning routes (NEW)
     Route::post('/f02/{f02Validasi}/allow-resubmit', [\App\Http\Controllers\F02ValidasiController::class, 'allowResubmit'])->name('f02.allow-resubmit')->where('f02Validasi', '[0-9]+');
     Route::post('/f02/allow-resubmit-bulk', [\App\Http\Controllers\F02ValidasiController::class, 'allowResubmitBulk'])->name('f02.allow-resubmit-bulk');
-    
+
     // F02 Skor Management routes
     Route::get('/f02-skor', [\App\Http\Controllers\F02SkorController::class, 'index'])->name('f02.skor.index');
     Route::get('/f02-skor/{aspek}', [\App\Http\Controllers\F02SkorController::class, 'show'])->name('f02.skor.show');
     Route::get('/api/f02-skor/{indikatorId}', [\App\Http\Controllers\F02SkorController::class, 'getSkor'])->name('f02.skor.get');
     Route::post('/api/f02-skor/save', [\App\Http\Controllers\F02SkorController::class, 'saveSkor'])->name('f02.skor.save');
     Route::post('/api/f02-skor/{indikatorId}/delete', [\App\Http\Controllers\F02SkorController::class, 'deleteSkor'])->name('f02.skor.delete');
-    
+
     // Public Periode listing (authenticated) — a friendly URL `/periode`
     Route::get('/periode', function () {
         $periodes = \App\Models\Periode::orderBy('tahun','desc')->paginate(20);
