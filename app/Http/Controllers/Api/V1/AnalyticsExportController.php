@@ -22,13 +22,15 @@ class AnalyticsExportController extends Controller
 
         $params = $request->all();
         $scopeContext = $params['scope_context'] ?? null;
-        $estimate = $service->estimateRows(['scope_context' => $scopeContext, 'filters' => $params['filters'] ?? null]);
+        $type = $params['type'] ?? 'csv';
+
+        // For CSV, decide sync vs queued using estimate; for PDF always queue
+        $estimate = $type === 'csv' ? $service->estimateRows(['scope_context' => $scopeContext, 'filters' => $params['filters'] ?? null]) : null;
 
         $effectiveThreshold = (int) floor(config('analytics.sync_threshold', 50000) * 0.8);
 
-        // Synchronous path for small exports
-        if ($estimate <= $effectiveThreshold) {
-            // Stream CSV directly
+        // Synchronous path for small CSV exports
+        if ($type === 'csv' && $estimate !== null && $estimate <= $effectiveThreshold) {
             $readService = app(AnalyticsReadService::class);
             return $this->streamCsvResponse($readService, $params);
         }
@@ -48,14 +50,18 @@ class AnalyticsExportController extends Controller
                 'scope_key' => $scopeContext['scope_key'] ?? null,
                 'idempotency_key' => $idempotency,
                 'correlation_id' => $params['correlation_id'] ?? null,
-                'type' => 'csv',
+                'type' => $type,
                 'params' => $params,
                 'status' => 'pending',
                 'total_rows_estimate' => $estimate,
             ]);
 
-            // Dispatch queued job
-            GenerateAnalyticsCsvJob::dispatch($export->id);
+            // Dispatch queued job depending on type
+            if ($type === 'csv') {
+                GenerateAnalyticsCsvJob::dispatch($export->id);
+            } else {
+                \App\Jobs\Analytics\GenerateAnalyticsPdfJob::dispatch($export->id);
+            }
 
             return response()->json(['message' => 'queued', 'export_id' => $export->id], 202);
         } catch (\RuntimeException $e) {
