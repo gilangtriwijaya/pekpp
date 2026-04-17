@@ -121,6 +121,11 @@ class GenerateAnalyticsCsvJob implements ShouldQueue
         }
     }
 
+    public function middleware()
+    {
+        return [new \App\Jobs\Middleware\EnsureJobHasScope()];
+    }
+
     protected function computeProgress(int $processed, $estimate): float
     {
         $total = $estimate ?: max(1, $processed);
