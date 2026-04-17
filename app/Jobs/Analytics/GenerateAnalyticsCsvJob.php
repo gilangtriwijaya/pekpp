@@ -10,6 +10,7 @@ use Illuminate\Queue\SerializesModels;
 use App\Services\Analytics\AnalyticsReadService;
 use Illuminate\Support\Facades\Storage;
 use App\Jobs\SendAnalyticsExportNotificationJob;
+use App\Services\Analytics\Metrics\AnalyticsMetrics;
 
 class GenerateAnalyticsCsvJob implements ShouldQueue
 {
@@ -26,10 +27,15 @@ class GenerateAnalyticsCsvJob implements ShouldQueue
 
     public function handle()
     {
+        $metrics = app(AnalyticsMetrics::class);
+        $start = microtime(true);
+
         $export = AnalyticsExport::find($this->exportId);
         if (!$export) {
             return;
         }
+
+        $metrics->incrementExportStarted('csv');
 
         $export->update(['status' => 'processing', 'started_at' => now(), 'last_attempted_at' => now()]);
 
@@ -110,6 +116,11 @@ class GenerateAnalyticsCsvJob implements ShouldQueue
                 'finished_at' => now(),
             ]);
 
+            $duration = microtime(true) - $start;
+            $metrics->observeExportDuration('csv', $duration);
+            $metrics->incrementExportSucceeded('csv');
+            $metrics->observeRowsProcessed($processed);
+
             // notify
             SendAnalyticsExportNotificationJob::dispatch($export->id);
         } catch (\Throwable $e) {
@@ -117,6 +128,7 @@ class GenerateAnalyticsCsvJob implements ShouldQueue
                 fclose($fp);
             }
             $export->update(['status' => 'failed', 'error_message' => $e->getMessage(), 'last_attempted_at' => now()]);
+            $metrics->incrementExportFailed('csv');
             throw $e;
         }
     }

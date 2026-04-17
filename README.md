@@ -66,3 +66,9 @@ Operational docs and feature log are in the `docs/` folder:
 - `docs/SSO-and-secret-management.md` — SSO pull auth, HMAC, multi-key rotation, scheduler, and secret recommendations.
 - `docs/FEATURE_LOG.md` — chronological feature log; append here whenever you add a feature.
 
+Analytics feature docs:
+
+- `docs/ANALYTICS_ROADMAP.md` — design and roadmap for analytics and exports.
+- `docs/ANALYTICS_IMPLEMENTATION.md` — implementation notes and runbook added by feature/analytics-full.
+
+

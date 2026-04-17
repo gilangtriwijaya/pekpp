@@ -38,10 +38,7 @@ class AnalyticsExportService
      * Placeholder: create export record. Implementation will validate idempotency,
      * persist params and enqueue the job.
      */
-    public function createExportRecord(array $data): AnalyticsExport
-    {
-        return AnalyticsExport::create($data);
-    }
+    // legacy placeholder removed — full implementation below
 
     public function findExistingByIdempotency(?string $idempotencyKey, ?int $tenantId = null)
     {

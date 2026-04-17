@@ -1,0 +1,28 @@
+name: Analytics CI
+
+on:
+  push:
+    branches: [ feature/analytics-full, main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v4
+        with:
+          php-version: '8.2'
+          extensions: mbstring, bcmath, pdo_mysql
+      - name: Install composer deps
+        run: composer install --no-progress --no-interaction --prefer-dist
+      - name: Create env
+        run: cp .env.example .env || true
+      - name: Generate app key
+        run: php artisan key:generate || true
+      - name: Run migrations
+        run: php artisan migrate --force || true
+      - name: Run tests
+        run: vendor/bin/phpunit --colors=always

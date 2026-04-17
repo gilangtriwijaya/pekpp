@@ -9,6 +9,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Services\Analytics\AnalyticsPdfService;
 use App\Jobs\SendAnalyticsExportNotificationJob;
+use App\Services\Analytics\Metrics\AnalyticsMetrics;
 
 class GenerateAnalyticsPdfJob implements ShouldQueue
 {
@@ -24,6 +25,9 @@ class GenerateAnalyticsPdfJob implements ShouldQueue
 
     public function handle(AnalyticsPdfService $pdfService)
     {
+        $metrics = app(AnalyticsMetrics::class);
+        $start = microtime(true);
+
         $export = AnalyticsExport::find($this->exportId);
         if (! $export) return;
 
@@ -49,10 +53,13 @@ class GenerateAnalyticsPdfJob implements ShouldQueue
                 'progress_percent' => 100.00,
                 'finished_at' => now(),
             ]);
-
+            $duration = microtime(true) - $start;
+            $metrics->observeExportDuration('pdf', $duration);
+            $metrics->incrementExportSucceeded('pdf');
             SendAnalyticsExportNotificationJob::dispatch($export->id);
         } catch (\Throwable $e) {
             $export->update(['status' => 'failed', 'error_message' => $e->getMessage(), 'last_attempted_at' => now()]);
+            $metrics->incrementExportFailed('pdf');
             throw $e;
         }
     }
