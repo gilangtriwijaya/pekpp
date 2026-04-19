@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Str;
 
 class Pertanyaan extends Model
 {
@@ -71,6 +72,20 @@ class Pertanyaan extends Model
     {
         // Sort by indikator_id first, then by kode alphanumerically
         return $q->orderBy('indikator_id', 'asc')->orderBy('kode', 'asc');
+    }
+
+    protected static function booted()
+    {
+        static::creating(function ($model) {
+            if (empty($model->kode)) {
+                $model->kode = 'K' . strtoupper(Str::random(8));
+            }
+        });
+
+        // When a parent question is deleted, also delete its conditional child questions
+        static::deleting(function ($model) {
+            $model->conditionalQuestions()->delete();
+        });
     }
 
     // Helper: normalized tipe (text, radio, checkbox, skala)

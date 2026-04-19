@@ -13,8 +13,11 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE pertanyaan MODIFY COLUMN tipe_input 
-            ENUM('text','textarea','number','radio','checkbox','select','yesno','skala')");
+        $driver = DB::getDriverName();
+        if ($driver !== 'sqlite') {
+            DB::statement("ALTER TABLE pertanyaan MODIFY COLUMN tipe_input
+                ENUM('text','textarea','number','radio','checkbox','select','yesno','skala')");
+        }
     }
 
     /**
@@ -22,7 +25,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("ALTER TABLE pertanyaan MODIFY COLUMN tipe_input 
-            ENUM('text','textarea','number','radio','checkbox','select','yesno')");
+        $driver = DB::getDriverName();
+        if ($driver !== 'sqlite') {
+            DB::statement("ALTER TABLE pertanyaan MODIFY COLUMN tipe_input
+                ENUM('text','textarea','number','radio','checkbox','select','yesno')");
+        }
     }
 };

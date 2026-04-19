@@ -40,6 +40,12 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+        // Provide a simple `sanctum` guard mapping for testing environments
+        // so tests that call actingAs($user, 'sanctum') work without installing Sanctum.
+        'sanctum' => [
+            'driver' => 'session',
+            'provider' => 'users',
+        ],
     ],
 
     /*

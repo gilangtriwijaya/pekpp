@@ -15,7 +15,13 @@
         --}}
 
     <link rel="icon" href="{{ asset('images/logo-pemda.png') }}" type="image/png">
-    
+
+    {{-- Livewire Styles --}}
+    @livewireStyles
+
+    {{-- Chart.js Library --}}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
     {{-- Stack for page-specific styles --}}
     @stack('styles')
 </head>
@@ -53,6 +59,9 @@
 
 {{-- Impersonate Idle Timeout (only when impersonating) --}}
 @include('components.impersonate-idle-timeout')
+
+{{-- Livewire Scripts --}}
+@livewireScripts
 
 @stack('scripts')
 </body>

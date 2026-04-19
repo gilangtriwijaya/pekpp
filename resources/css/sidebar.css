@@ -63,9 +63,9 @@
 .pekppp-ui .brand-text .subtitle { color:rgba(206,227,246,0.9); font-size:0.9rem; margin:0; margin-top:3px; }
 
 /* Nav area */
-.pekppp-ui .sidebar-nav { 
-  padding:12px 12px; 
-  overflow-y:auto !important; 
+.pekppp-ui .sidebar-nav {
+  padding:12px 12px;
+  overflow-y:auto !important;
   overflow-x:hidden !important;
   flex:1;
   /* Hide scrollbar but keep scrolling functional */
@@ -157,13 +157,13 @@
   font-size: 0.94rem;
 }
 
-.pekppp-ui .nav-section-title { 
-  display:block; 
-  font-size:11px; 
+.pekppp-ui .nav-section-title {
+  display:block;
+  font-size:11px;
   font-weight:700;
-  text-transform:uppercase; 
-  color:rgba(206,227,246,0.7); 
-  margin:16px 6px 10px 6px; 
+  text-transform:uppercase;
+  color:rgba(206,227,246,0.7);
+  margin:16px 6px 10px 6px;
   padding-left:8px;
   letter-spacing: 0.5px;
   border-bottom: 1px solid rgba(206,227,246,0.1);
@@ -182,12 +182,12 @@
   font-weight:600;
   transition:background-color 160ms ease, transform 120ms ease;
 }
-.pekppp-ui .nav-item .icon { 
-  width:24px; 
-  height:24px; 
-  display:inline-flex; 
-  align-items:center; 
-  justify-content:center; 
+.pekppp-ui .nav-item .icon {
+  width:24px;
+  height:24px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
   font-size:1.2rem;
   flex-shrink: 0;
 }
@@ -225,14 +225,19 @@
 .pekppp-ui .sidebar-footer { padding:14px 20px; color:rgba(206,227,246,0.6); font-size:12px; border-top:1px solid rgba(255,255,255,0.02); }
 
 /* Collapsed behavior preserved but polished */
-.pekppp-ui .pekppp-sidebar.collapsed { width:84px; }
+.pekppp-ui .pekppp-sidebar.collapsed { width:96px; }
+.pekppp-ui .pekppp-sidebar.collapsed .sidebar-brand { padding:18px 0 14px; justify-content:center; }
+.pekppp-ui .pekppp-sidebar.collapsed .brand-link { justify-content:center; gap:0; width:100%; }
+.pekppp-ui .pekppp-sidebar.collapsed .brand-logo-wrapper { width:100%; justify-content:center; }
+.pekppp-ui .pekppp-sidebar.collapsed .brand-logo-badge { width:48px; height:48px; margin:0 auto; }
 .pekppp-ui .pekppp-sidebar.collapsed .brand-text { display:none; }
 .pekppp-ui .pekppp-sidebar.collapsed .label { display:none; }
-.pekppp-ui .pekppp-sidebar.collapsed .nav-item { justify-content:center; padding:12px 8px; }
-
-/* when collapsed give the brand area a little left padding and reduce logo size slightly */
-.pekppp-ui .pekppp-sidebar.collapsed .sidebar-brand { padding-left:12px; padding-right:12px; }
-.pekppp-ui .pekppp-sidebar.collapsed .brand-logo { width:46px; height:46px; margin-left:6px; }
+.pekppp-ui .pekppp-sidebar.collapsed .nav-section { padding-left:0; padding-right:0; }
+.pekppp-ui .pekppp-sidebar.collapsed .nav-item { justify-content:center; padding:12px 0; width:100%; }
+.pekppp-ui .pekppp-sidebar.collapsed .nav-icon,
+.pekppp-ui .pekppp-sidebar.collapsed .accordion-icon { margin:0 auto; }
+.pekppp-ui .pekppp-sidebar.collapsed .nav-section-title { justify-content:center; padding:12px 0; width:100%; }
+.pekppp-ui .pekppp-sidebar.collapsed .accordion-arrow { display:none; }
 
 /* Accessibility: focus-visible */
 .pekppp-ui .nav-item:focus-visible { outline:2px solid rgba(255,255,255,0.06); outline-offset:3px; }

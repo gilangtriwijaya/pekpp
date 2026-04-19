@@ -8,12 +8,13 @@ use Tests\TestCase;
 class ExampleTest extends TestCase
 {
     /**
-     * A basic test example.
+     * A basic test example. The root route redirects to SSO login for unauthenticated users.
      */
-    public function test_the_application_returns_a_successful_response(): void
+    public function test_the_application_returns_a_redirect(): void
     {
         $response = $this->get('/');
 
-        $response->assertStatus(200);
+        // Root route redirects to SSO login
+        $response->assertStatus(302);
     }
 }

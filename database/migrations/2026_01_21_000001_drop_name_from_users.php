@@ -21,7 +21,9 @@ return new class extends Migration
 
         // 2) Drop the legacy `name` column safely
         try {
-            if (Schema::hasColumn('users', 'name')) {
+            // Skip dropping the legacy `name` column on SQLite (tests use in-memory SQLite)
+            $driver = DB::getDriverName();
+            if ($driver !== 'sqlite' && Schema::hasColumn('users', 'name')) {
                 Schema::table('users', function (Blueprint $table) {
                     $table->dropColumn('name');
                 });

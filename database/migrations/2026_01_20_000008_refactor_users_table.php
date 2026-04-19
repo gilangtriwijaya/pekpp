@@ -90,32 +90,35 @@ return new class extends Migration
         }
 
         // 4) Drop auth / payload columns we no longer keep
-        try {
-            Schema::table('users', function (Blueprint $table) {
-                if (Schema::hasColumn('users', 'password')) {
-                    $table->dropColumn('password');
-                }
-                if (Schema::hasColumn('users', 'remember_token')) {
-                    $table->dropColumn('remember_token');
-                }
-                if (Schema::hasColumn('users', 'email_verified_at')) {
-                    $table->dropColumn('email_verified_at');
-                }
-                if (Schema::hasColumn('users', 'sso_app_roles')) {
-                    $table->dropColumn('sso_app_roles');
-                }
-                if (Schema::hasColumn('users', 'sso_app_role')) {
-                    $table->dropColumn('sso_app_role');
-                }
-                if (Schema::hasColumn('users', 'sso_allowed_opds_by_app')) {
-                    $table->dropColumn('sso_allowed_opds_by_app');
-                }
-                if (Schema::hasColumn('users', 'username')) {
-                    $table->dropColumn('username');
-                }
-            });
-        } catch (\Exception $e) {
-            // ignore drop failures (manual cleanup may be required)
+        // Skip destructive drops on SQLite (tests use in-memory SQLite)
+        if (Schema::getConnection()->getDriverName() !== 'sqlite') {
+            try {
+                Schema::table('users', function (Blueprint $table) {
+                    if (Schema::hasColumn('users', 'password')) {
+                        $table->dropColumn('password');
+                    }
+                    if (Schema::hasColumn('users', 'remember_token')) {
+                        $table->dropColumn('remember_token');
+                    }
+                    if (Schema::hasColumn('users', 'email_verified_at')) {
+                        $table->dropColumn('email_verified_at');
+                    }
+                    if (Schema::hasColumn('users', 'sso_app_roles')) {
+                        $table->dropColumn('sso_app_roles');
+                    }
+                    if (Schema::hasColumn('users', 'sso_app_role')) {
+                        $table->dropColumn('sso_app_role');
+                    }
+                    if (Schema::hasColumn('users', 'sso_allowed_opds_by_app')) {
+                        $table->dropColumn('sso_allowed_opds_by_app');
+                    }
+                    if (Schema::hasColumn('users', 'username')) {
+                        $table->dropColumn('username');
+                    }
+                });
+            } catch (\Exception $e) {
+                // ignore drop failures (manual cleanup may be required)
+            }
         }
     }
 

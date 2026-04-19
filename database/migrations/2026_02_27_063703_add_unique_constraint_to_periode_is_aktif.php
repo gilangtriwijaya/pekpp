@@ -14,31 +14,35 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Create BEFORE INSERT trigger to prevent multiple active periods
-        DB::statement("
-            CREATE TRIGGER trigger_periode_insert_aktif BEFORE INSERT ON periode
-            FOR EACH ROW
-            BEGIN
-                IF NEW.is_aktif = 1 THEN
-                    IF (SELECT COUNT(*) FROM periode WHERE is_aktif = 1) > 0 THEN
-                        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only one periode can be active at a time';
+        // Only create triggers on DBs that support them (skip for SQLite used in tests)
+        $driver = DB::getDriverName();
+        if ($driver !== 'sqlite') {
+            // Create BEFORE INSERT trigger to prevent multiple active periods
+            DB::statement("
+                CREATE TRIGGER trigger_periode_insert_aktif BEFORE INSERT ON periode
+                FOR EACH ROW
+                BEGIN
+                    IF NEW.is_aktif = 1 THEN
+                        IF (SELECT COUNT(*) FROM periode WHERE is_aktif = 1) > 0 THEN
+                            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only one periode can be active at a time';
+                        END IF;
                     END IF;
-                END IF;
-            END
-        ");
+                END
+            ");
 
-        // Create BEFORE UPDATE trigger to prevent multiple active periods
-        DB::statement("
-            CREATE TRIGGER trigger_periode_update_aktif BEFORE UPDATE ON periode
-            FOR EACH ROW
-            BEGIN
-                IF NEW.is_aktif = 1 AND OLD.is_aktif = 0 THEN
-                    IF (SELECT COUNT(*) FROM periode WHERE is_aktif = 1) > 0 THEN
-                        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only one periode can be active at a time';
+            // Create BEFORE UPDATE trigger to prevent multiple active periods
+            DB::statement("
+                CREATE TRIGGER trigger_periode_update_aktif BEFORE UPDATE ON periode
+                FOR EACH ROW
+                BEGIN
+                    IF NEW.is_aktif = 1 AND OLD.is_aktif = 0 THEN
+                        IF (SELECT COUNT(*) FROM periode WHERE is_aktif = 1) > 0 THEN
+                            SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Only one periode can be active at a time';
+                        END IF;
                     END IF;
-                END IF;
-            END
-        ");
+                END
+            ");
+        }
     }
 
     /**
@@ -46,7 +50,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement('DROP TRIGGER IF EXISTS trigger_periode_insert_aktif');
-        DB::statement('DROP TRIGGER IF EXISTS trigger_periode_update_aktif');
+        $driver = DB::getDriverName();
+        if ($driver !== 'sqlite') {
+            DB::statement('DROP TRIGGER IF EXISTS trigger_periode_insert_aktif');
+            DB::statement('DROP TRIGGER IF EXISTS trigger_periode_update_aktif');
+        }
     }
 };

@@ -50,4 +50,41 @@ class AnalyticsReadService
 
         return ['kpi' => ['total_rows' => $total], 'charts' => [], 'table' => ['rows' => [], 'meta' => []]];
     }
+
+    public function getAspekAggregates(array $filters = [])
+    {
+        $query = AnalyticsAggregate::query()
+            ->where('level', 'aspek')
+            ->select('aspek_id', 'aspek_nama', 'skor_aspek')
+            ->groupBy('aspek_id', 'aspek_nama');
+
+        if (!empty($filters['periode_id'])) {
+            $query->where('periode_id', $filters['periode_id']);
+        }
+        if (!empty($filters['upp_id'])) {
+            $query->where('upp_id', $filters['upp_id']);
+        }
+
+        return $query->get();
+    }
+
+    public function getIndikatorAggregates(array $filters = [])
+    {
+        $query = AnalyticsAggregate::query()
+            ->where('level', 'indikator')
+            ->select('indikator_id', 'indikator_nama', 'skor_indikator', 'aspek_id')
+            ->groupBy('indikator_id', 'indikator_nama', 'aspek_id');
+
+        if (!empty($filters['periode_id'])) {
+            $query->where('periode_id', $filters['periode_id']);
+        }
+        if (!empty($filters['upp_id'])) {
+            $query->where('upp_id', $filters['upp_id']);
+        }
+        if (!empty($filters['aspek_id'])) {
+            $query->where('aspek_id', $filters['aspek_id']);
+        }
+
+        return $query->get();
+    }
 }
