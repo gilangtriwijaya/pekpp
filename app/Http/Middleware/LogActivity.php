@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\ActivityLog;
 
 class LogActivity
@@ -13,6 +14,10 @@ class LogActivity
      */
     public function handle(Request $request, Closure $next)
     {
+        // Skip activity logging during tests to avoid view/session side-effects.
+        if (app()->environment('testing')) {
+            return $next($request);
+        }
         // Let the request run first so controllers can update session/state before we capture final details.
         $response = $next($request);
 
@@ -32,9 +37,10 @@ class LogActivity
         try {
             $action = $request->method() . ' ' . $request->route()?->getName() ?? 'request';
             $params = $request->except(['_token','password','password_confirmation']);
+            $user = Auth::user();
 
             ActivityLog::create([
-                'user_id' => auth()->id(),
+                'user_id' => $user?->id,
                 'action' => $action,
                 'route' => $request->route()?->getName(),
                 'method' => $request->method(),

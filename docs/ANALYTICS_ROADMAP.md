@@ -270,6 +270,27 @@ API versioning
   4. Job writes to temp file (`storage/app/exports/analytics/{yyyy}/{mm}/{id}.csv`), sets `status=ready`, stores `file_size` and `processed_rows`.
   5. Dispatch `SendAnalyticsExportNotificationJob` with signed download URL and `correlation_id`.
 
+EstimateRows implementation (guidance)
+
+Example implementation that counts on `analytics_aggregates` (indicator-level) to keep the estimate cheap and indexed:
+
+```php
+public function estimateRows(array $params): int
+{
+    $query = AnalyticsAggregate::query()
+        ->applyScope($params['scope_context'])
+        ->applyFilters($params)
+        ->where('level', 'indicator');
+
+    // Use toBase()->count() to avoid model hydration and rely on DB COUNT()
+    return (int) $query->toBase()->count();
+}
+```
+
+Notes:
+- This is an estimate, not an exact row-by-row count of the final CSV. Keep a safety buffer when comparing to `SYNC_THRESHOLD` (recommended: use an effective threshold of `floor(config('analytics.sync_threshold') * 0.8)` to avoid edge cases where a near-threshold export overruns sync limits).
+- Prefer `analytics_aggregates` for estimates because counts on the precomputed table are typically much cheaper than scanning raw source tables. If filters are complex and require joins, consider a heuristic fallback map (filter combinations → estimated multiplier) or route to queued export conservatively.
+
 - CSV streaming code pattern (controller):
 
 ```php
@@ -283,7 +304,14 @@ public function streamCsvResponse(array $params)
     fputcsv($handle, ['periode_id','upp_id','upp_nama','aspek_id','aspek_nama','indikator_id','indikator_nama','total_responses','avg_score','pct_validated']);
     $query = $this->buildAggregateQuery($params);
     $query->chunkById(1000, function($rows) use ($handle) {
+      // stop if client disconnected
+      if (function_exists('connection_aborted') && connection_aborted()) {
+        return false; // stop further chunking
+      }
       foreach ($rows as $row) {
+        if (function_exists('connection_aborted') && connection_aborted()) {
+          return false;
+        }
         fputcsv($handle, [...]);
       }
     });
@@ -309,9 +337,6 @@ Authorization & Tenant Scoping (MANDATORY)
 - All services, controllers, queued jobs, export flows, and aggregate rebuild processes MUST accept and propagate a single scoped context (`ScopeContext`) containing at minimum: `tenant_id`/`opd_id`, `scope_key`, `user_id`, `roles`, and `correlation_id`. No background worker or service should execute cross-tenant queries without an explicit, auditable exception.
 - Implementation guidance:
   - Enforce scope checks in the service layer (`AnalyticsReadService`, `AnalyticsAggregationService`, `AnalyticsExportService`) so every read/write honors the provided `scope_key`/`opd_id`.
-  - Provide job middleware (e.g., `EnsureScopeContext`) that rejects jobs lacking scope or where the scope is not authorized for the enqueued user/context. Implementation note: Laravel supports `Queue::createPayloadUsing()` and job middleware via the `middleware()` method (or global queue middleware) — use these to inject and persist a `ScopeContext` into analytics job payloads automatically so you don't need to add manual constructor parameters on every job class.
-  - Persist `scope_key` and `tenant_id` on `analytics_exports` and any rebuild job records for traceability.
-  - Enforce scope checks in the service layer (`AnalyticsService`, `AnalyticsAggregationService`, `AnalyticsExportService`) so every read/write honors the provided `scope_key`/`opd_id`.
   - Provide job middleware (e.g., `EnsureScopeContext`) that rejects jobs lacking scope or where the scope is not authorized for the enqueued user/context. Implementation note: Laravel supports `Queue::createPayloadUsing()` and job middleware via the `middleware()` method (or global queue middleware) — use these to inject and persist a `ScopeContext` into analytics job payloads automatically so you don't need to add manual constructor parameters on every job class.
   - Persist `scope_key` and `tenant_id` on `analytics_exports` and any rebuild job records for traceability.
 
@@ -387,15 +412,11 @@ Export rules reinforcement
 - `correlation_id` (UUID) must be set at request time, persisted on `analytics_exports`, propagated to job payloads, and displayed in the exports UI/status pages so users and support staff can reference it.
 - Export jobs MUST update progress fields on `analytics_exports` periodically (`processed_rows`, `total_rows_estimate`, `progress_percent`) — e.g., every N rows (default 1000) or every X seconds.
 - Export retry/duplicate rules: if a duplicate request is detected via `idempotency_key`, do not queue a new job; return the existing export record and its status.
- - Idempotency is mandatory: clients must send `Idempotency-Key`. `AnalyticsExportService` must deduplicate using `idempotency_key` and return existing `analytics_exports` when within idempotency window.
- - `correlation_id` (UUID) must be set at request time, persisted on `analytics_exports`, propagated to job payloads, and displayed in the exports UI/status pages so users and support staff can reference it.
- - Export jobs MUST update progress fields on `analytics_exports` periodically (`processed_rows`, `total_rows_estimate`, `progress_percent`) — e.g., every N rows (default 1000) or every X seconds.
- - Export retry/duplicate rules: if a duplicate request is detected via `idempotency_key`, do not queue a new job; return the existing export record and its status.
- - Failure & retry semantics (explicit): when a request arrives with an existing `idempotency_key`:
-   - If an existing export record has status `pending`, `processing`, or `ready`, return that record (no new job queued).
-   - If the existing export record has status `failed`, respond with HTTP `409 Conflict` and include the `export_id` and `status` in the response; require the client to explicitly call `POST /analytics/exports/{id}/retry` to requeue the job. Optionally support an emergency header `X-Idempotency-Force-Retry: true` to requeue automatically and increment `idempotency_attempts` (implement cautiously).
-   - Persist `idempotency_attempts` (unsignedInteger, default 0) and `last_attempted_at` (timestamp) on `analytics_exports` to help ops and rate-limits.
-   - `POST /analytics/exports/{id}/retry` MUST validate the original `idempotency_key`, verify authorization, create a new processing attempt, and update `idempotency_attempts`.
+- Failure & retry semantics (explicit): when a request arrives with an existing `idempotency_key`:
+  - If an existing export record has status `pending`, `processing`, or `ready`, return that record (no new job queued).
+  - If the existing export record has status `failed`, respond with HTTP `409 Conflict` and include the `export_id` and `status` in the response; require the client to explicitly call `POST /analytics/exports/{id}/retry` to requeue the job. Optionally support an emergency header `X-Idempotency-Force-Retry: true` to requeue automatically and increment `idempotency_attempts` (implement cautiously).
+  - Persist `idempotency_attempts` (unsignedInteger, default 0) and `last_attempted_at` (timestamp) on `analytics_exports` to help ops and rate-limits.
+  - `POST /analytics/exports/{id}/retry` MUST validate the original `idempotency_key`, verify authorization, create a new processing attempt, and update `idempotency_attempts`.
 
   Export rate limiting (design)
 
@@ -431,15 +452,8 @@ Monitoring thresholds (suggested defaults)
 - Export runtime SLA: alert if any export job runs > 2 hours (critical); raise warning if > 1 hour.
 - Orphan files: alert if cleanup job finds > 10 orphan export files during a run.
 - Throughput regression: alert if `analytics_export_rows_per_minute` drops > 50% vs baseline over 30 minutes.
+- Aggregator stagnation: alert if `aggregate_version` (or `computed_at`) for a given `periode_id` + `scope_key` does not change for > 2 hours (configurable). This helps detect stalled incremental updaters or broken workers.
 - Store these numeric defaults in `config/analytics.php` and allow ops to tune per environment.
- - Monitoring thresholds (suggested defaults)
- - Exports queue backlog: alert if `exports` queue backlog > 50 jobs for > 10 minutes.
- - Job failure rate: alert if job failure rate > 5% over a 1-hour window.
- - Export runtime SLA: alert if any export job runs > 2 hours (critical); raise warning if > 1 hour.
- - Orphan files: alert if cleanup job finds > 10 orphan export files during a run.
- - Throughput regression: alert if `analytics_export_rows_per_minute` drops > 50% vs baseline over 30 minutes.
- - Aggregator stagnation: alert if `aggregate_version` (or `computed_at`) for a given `periode_id` + `scope_key` does not change for > 2 hours (configurable). This helps detect stalled incremental updaters or broken workers.
- - Store these numeric defaults in `config/analytics.php` and allow ops to tune per environment.
 
 12) Monitoring, observability & ops
 - Queue monitoring: Laravel Horizon (Redis). Configure supervisors per queue (`exports`, `aggregates`, `default`).
@@ -485,6 +499,7 @@ Also add tests that validate job payload serialization/deserialization for `Scop
   - Mitigasi: use snappy/wkhtmltopdf or headless Chrome; add visual regression tests for sample reports.
 
 16) Implementasi - rencana fase (full implementation)
+16) Implementasi - rencana fase (full implementation)
 - Phase 0 — Kickoff & infra readiness (1-2 hari)
   - Konfirmasi volume data, siapkan Redis, Horizon, S3/private storage, SSL, dan SMTP.
   - Define SYNC_THRESHOLD (default 50k rows).
@@ -493,21 +508,15 @@ Also add tests that validate job payload serialization/deserialization for `Scop
   - Models & basic seeder for roles.
 - Phase 2 — Aggregation services & jobs (3 hari)
   - Implement `AnalyticsAggregationService`, `RebuildAnalyticsAggregatesJob`, incremental updater.
+  - Add minimal controller/route skeletons and policy interfaces at the end of Phase 2 so export jobs and E2E flows can be exercised early (e.g., `/analytics/exports/*` status endpoints). This enables Phase 3 to be tested end-to-end without waiting for full frontend work.
 - Phase 3 — Export infra & jobs (3 hari)
-  - Implement `AnalyticsExportService`, `GenerateAnalyticsCsvJob`, `GenerateAnalyticsPdfJob`, notification job.
+  - Implement `AnalyticsExportService`, `GenerateAnalyticsCsvJob`, `GenerateAnalyticsPdfJob`, notification job. (Can run in parallel with Phase 4 once skeleton controllers exist.)
 - Phase 4 — Controllers, routes, policies (2 hari)
   - Implement APIs, policies, tenant middleware, and signed download route.
- - Phase 2 — Aggregation services & jobs (3 hari)
-   - Implement `AnalyticsAggregationService`, `RebuildAnalyticsAggregatesJob`, incremental updater.
-   - Add minimal controller/route skeletons and policy interfaces at the end of Phase 2 so export jobs and E2E flows can be exercised early (e.g., `/analytics/exports/*` status endpoints). This enables Phase 3 to be tested end-to-end without waiting for full frontend work.
- - Phase 3 — Export infra & jobs (3 hari)
-   - Implement `AnalyticsExportService`, `GenerateAnalyticsCsvJob`, `GenerateAnalyticsPdfJob`, notification job. (Can run in parallel with Phase 4 once skeleton controllers exist.)
- - Phase 4 — Controllers, routes, policies (2 hari)
-   - Implement APIs, policies, tenant middleware, and signed download route.
 - Phase 5 — Frontend (Livewire) & charts (3-4 hari)
   - Livewire `AnalyticsPanel`, filters, ApexCharts integration, table with server-side pagination.
 - Phase 6 — Scheduling, retention & ops (2 hari)
-  - Scheduled reports, `CleanOldExportFilesJob`, monitoring setup.
+  - Scheduled reports, `CleanOldExportFilesJob`, `ReconcileOrphanExportFilesJob` (reconcile orphan files and mark failed exports), monitoring setup.
 - Phase 7 — Tests, hardening & docs (3 days)
   - Unit/feature/job tests, performance testing, runbook.
 
@@ -560,13 +569,11 @@ Operational & data-model enhancements (ringkas)
 - `analytics_aggregates` core metadata (REQUIRED): `scope_key` (string) or `tenant_id` (unsignedBigInteger), `aggregate_version` (unsignedInteger), and `dimension_hash` (string). Optional metadata: `periode_label`, `last_source_updated_at`. These core columns enable safe scoping, deterministic uniqueness, and cache invalidation. If extreme compactness is required, a separate `analytics_aggregate_meta` table may be used, but the default implementation should include the core columns.
 - `analytics_exports` diperluas dengan: `idempotency_key`, `correlation_id`, `processed_rows` (int), `total_rows_estimate` (int), `progress_percent` (decimal) — memudahkan UI progress dan idempotency checks.
 
-Cache, idempotency & tracing
+- Cache, idempotency & tracing
 - Cache key pattern (contoh): `analytics:summary:v{aggregate_version}:{sha1(json_encode(filters))}`. Default TTL: 10 menit.
 - Incremental update invalidation: aggregator incremental updates MUST increment `aggregate_version` for affected aggregate rows (recommended) — mis. lakukan `aggregate_version = aggregate_version + 1` pada baris yang terpengaruh — sehingga cache keys yang menyertakan `v{aggregate_version}` (mis. `analytics:summary:v{aggregate_version}:{sha1(json_encode(filters))}`) otomatis berubah dan cache lama dianggap usang. Jika tidak memungkinkan, lakukan targeted cache invalidation pada keys yang terpengaruh (mis. keys yang cocok `scope_key + periode_id + dimension_hash`). Pendekatan ini mendukung invalidasi sempit tanpa perlu full flush.
 - Idempotency: require clients to provide an `Idempotency-Key` header on export requests. The server will compute a fallback key only when necessary, but production policy should mandate client-provided keys. Deduplicate or reject duplicate requests within a configurable idempotency window and persist `idempotency_key` on `analytics_exports`.
 - Tracing: propagate `correlation_id` (UUID) from request into `analytics_exports`, queued job payloads, structured log context, and user-facing notifications; surface the correlation id in notification emails and the exports UI for troubleshooting.
-- Cache key pattern (contoh): `analytics:summary:v{aggregate_version}:{sha1(json_encode(filters))}`. Default TTL: 10 menit.
-- Incremental update invalidation: aggregator incremental updates MUST increment `aggregate_version` for affected aggregate rows (recommended) — mis. lakukan `aggregate_version = aggregate_version + 1` pada baris yang terpengaruh — sehingga cache keys yang menyertakan `v{aggregate_version}` (mis. `analytics:summary:v{aggregate_version}:{sha1(json_encode(filters))}`) otomatis berubah dan cache lama dianggap usang. Jika tidak memungkinkan, lakukan targeted cache invalidation pada keys yang terpengaruh (mis. keys yang cocok `scope_key + periode_id + dimension_hash`). Pendekatan ini mendukung invalidasi sempit tanpa perlu full flush.
 
 - Race conditions & locking: incremental updater must guard against concurrent updates that can double-increment or skip versions. Two recommended patterns:
   - Optimistic update: read `aggregate_version` and then `UPDATE ... SET aggregate_version = aggregate_version + 1, ... WHERE id = :id AND aggregate_version = :expected_version`. If affected rows == 0, retry the read/compute step (bounded retries).
@@ -633,14 +640,14 @@ Frontend design choices (recommended):
 Decisions to be made (butuh konfirmasi)
 1. Volume bucket: berapa rata-rata baris `F02` per periode? (<100k / 100k–1M / >1M) — mempengaruhi partitioning & precompute frequency.
 2. Storage: `S3` (recommended) atau local disk? (S3 memberi temporaryUrl, local butuh signed route).
-3. PDF engine: `snappy/wkhtmltopdf` (recommended) vs `dompdf` vs headless Chrome — pilih berdasarkan contoh report fidelity.
+3. PDF engine: confirmed: `spatie/browsershot` (headless Chromium) is the preferred engine for production fidelity; `dompdf` may be used only for very simple templated reports.
 4. SYNC_THRESHOLD: nilai default 50k — setuju atau ubah? (mis. 20k/50k/100k)
 5. Retention policy untuk exported files (default 30 hari) — setuju atau perlu lebih pendek/panjang?
 6. Cache TTL default & apakah caching per-tenant diperlukan? (default TTL 10 menit)
 7. Precompute cadence: nightly full rebuild + incremental on write? (rekomendasi: incremental + nightly full)
 8. Partitioning strategy: implement sekarang bila volume besar, atau tunda hingga crossing threshold?
 9. Aggregate metadata location: simpan fields tambahan di `analytics_aggregates` atau buat `analytics_aggregate_meta` terpisah?
-10. Idempotency key policy: accept client-sent header or server computed only?
+10. Idempotency key policy: confirmed: require client-provided `Idempotency-Key` header; server may compute a fallback only in exceptional cases.
 11. Export rate limiting per user (e.g., max N queued exports per day) — numeric policy?
 12. Notification channel: email only or in-app + email?
 13. Read-replica usage for heavy live queries — tersedia atau tidak?

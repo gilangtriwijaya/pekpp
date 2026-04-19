@@ -21,5 +21,10 @@ class DatabaseSeeder extends Seeder
             'name' => 'Test User',
             'email' => 'test@example.com',
         ]);
+
+        // Analytics roles
+        if (class_exists(\Spatie\Permission\Models\Role::class)) {
+            $this->call(AnalyticsRolesSeeder::class);
+        }
     }
 }

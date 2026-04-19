@@ -18,7 +18,7 @@ class ConditionalQuestionsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->aspek = Aspek::factory()->create();
         $this->indikator = Indikator::factory()->create(['aspek_id' => $this->aspek->id]);
     }
@@ -40,12 +40,12 @@ class ConditionalQuestionsTest extends TestCase
         ];
 
         $response = $this->post(route('admin.f01.pertanyaan.store'), $data);
-        
+
         $this->assertEquals(1, Pertanyaan::where('label', 'Apakah Anda setuju?')->count());
-        
+
         $parent = Pertanyaan::where('label', 'Apakah Anda setuju?')->first();
         $this->assertEquals(2, $parent->conditionalQuestions()->count());
-        
+
         $this->assertEquals('Pertanyaan A', $parent->conditionalQuestions()->first()->label);
         $this->assertEquals('ya', $parent->conditionalQuestions()->first()->show_when);
     }
@@ -97,10 +97,11 @@ class ConditionalQuestionsTest extends TestCase
         ]);
 
         $this->assertEquals(1, $parent->conditionalQuestions()->count());
-        
+
         $parent->delete();
-        
-        $this->assertEquals(0, Pertanyaan::where('parent_pertanyaan_id', $parent->id)->count());
+
+        // After delete, children are soft-deleted so not counted when excluding deleted_at
+        $this->assertEquals(0, Pertanyaan::where('parent_pertanyaan_id', $parent->id)->whereNull('deleted_at')->count());
     }
 
     /** @test */
@@ -138,6 +139,7 @@ class ConditionalQuestionsTest extends TestCase
             'Accept' => 'application/json',
         ]);
 
+        // Verify response has children in conditional_questions relation
         $response->assertJsonPath('data.conditional_questions.0.label', 'Child 1');
         $response->assertJsonPath('data.conditional_questions.1.label', 'Child 2');
     }

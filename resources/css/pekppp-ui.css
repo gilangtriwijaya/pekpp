@@ -71,7 +71,7 @@
    1. Design Tokens / Variables
    ====================================================== */
 
-.pekppp-ui { 
+.pekppp-ui {
     --color-bg: #f8fafc;
     --color-surface: #ffffff;
     --color-border: #e2e8f0;
@@ -161,16 +161,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     width: 40px;
     height: 40px;
     padding: 0;
-    
+
     background: transparent;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     cursor: pointer;
-    
+
     color: #64748b;
     transition: all 120ms ease;
 }
@@ -219,14 +219,14 @@
     padding: 8px 14px;
     font-size: 13px;
     font-weight: 500;
-    
+
     background: transparent;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    
+
     color: #0f172a;
     cursor: pointer;
-    
+
     transition: all 120ms ease;
 }
 
@@ -247,14 +247,14 @@
     display: flex;
     align-items: center;
     gap: 12px;
-    
+
     padding: 6px 12px 6px 6px;
     border-radius: 8px;
-    
+
     background: transparent;
     border: 1px solid transparent;
     cursor: pointer;
-    
+
     transition: all 120ms ease;
 }
 
@@ -268,17 +268,17 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    
+
     width: 40px;
     height: 40px;
-    
+
     background: linear-gradient(135deg, #3b82f6, #1d4ed8);
     color: #ffffff;
-    
+
     border-radius: 50%;
     font-size: 15px;
     font-weight: 700;
-    
+
     flex-shrink: 0;
 }
 
@@ -333,11 +333,11 @@
 
     min-width: 280px;
     max-width: 320px;
-    
+
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
-    box-shadow: 
+    box-shadow:
         0 10px 25px rgba(15, 23, 42, 0.1),
         0 4px 10px rgba(15, 23, 42, 0.06);
 
@@ -345,7 +345,7 @@
     transform: translateY(-8px) scale(0.95);
     pointer-events: none;
     transition: opacity 180ms ease, transform 180ms ease;
-    
+
     overflow: hidden;
     z-index: 50;
 }
@@ -390,11 +390,11 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    
+
     padding: 10px 16px;
     background: rgba(59, 130, 246, 0.08);
     border-bottom: 1px solid rgba(59, 130, 246, 0.15);
-    
+
     font-size: 11px;
     font-weight: 600;
     color: #2563eb;
@@ -452,19 +452,19 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    
+
     width: 100%;
     padding: 12px 16px;
-    
+
     background: transparent;
     border: none;
-    
+
     text-align: left;
     font-size: 13px;
     font-weight: 500;
     color: #0f172a;
     cursor: pointer;
-    
+
     transition: background 100ms ease, color 100ms ease;
 }
 
@@ -496,33 +496,33 @@
     .pekppp-ui .pekppp-topbar {
         padding: 0 16px;
     }
-    
+
     /* Reduce gap between items */
     .pekppp-ui .topbar-left,
     .pekppp-ui .topbar-right {
         gap: 12px;
     }
-    
+
     /* Hide cache button on small screens */
     .pekppp-ui .btn-cache-clear {
         display: none;
     }
-    
+
     /* Hide profile text on mobile */
     .pekppp-ui .profile-text {
         display: none;
     }
-    
+
     /* Hide chevron on mobile */
     .pekppp-ui .profile-chevron {
         display: none;
     }
-    
+
     /* Adjust button padding when text is hidden */
     .pekppp-ui .profile-btn {
         padding: 6px;
     }
-    
+
     /* Adjust dropdown position on mobile */
     .pekppp-ui .profile-menu {
         right: -8px;
@@ -535,7 +535,7 @@
     .pekppp-ui .topbar-title {
         font-size: 14px;
     }
-    
+
     /* Make dropdown full width on very small screens */
     .pekppp-ui .profile-menu {
         right: -16px;
@@ -718,16 +718,64 @@
    ====================================================== */
 
 .pekppp-ui .pekppp-sidebar.collapsed {
-    width: 100px !important;
-    flex: 0 0 100px !important; /* ensure flex-basis collapses too */
-    min-width: 100px !important;
-    padding-left: 6px;
-    padding-right: 6px;
+    width: 96px !important;
+    flex: 0 0 96px !important; /* ensure flex-basis collapses too */
+    min-width: 96px !important;
+    padding-left: 0;
+    padding-right: 0;
     overflow: hidden;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .sidebar-brand {
+    padding: 18px 0 14px;
+    justify-content: center;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .brand-link {
+    justify-content: center;
+    gap: 0;
+    width: 100%;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .brand-logo-wrapper {
+    width: 100%;
+    justify-content: center;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .brand-logo-badge {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto;
 }
 
 .pekppp-ui .pekppp-sidebar.collapsed .brand-text,
 .pekppp-ui .pekppp-sidebar.collapsed .label {
+    display: none;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .nav-section {
+    padding-left: 0;
+    padding-right: 0;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .nav-item {
+    justify-content: center;
+    padding: 12px 0;
+    width: 100%;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .nav-icon,
+.pekppp-ui .pekppp-sidebar.collapsed .accordion-icon {
+    margin: 0 auto;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .nav-section-title {
+    justify-content: center;
+    padding: 12px 0;
+    width: 100%;
+}
+
+.pekppp-ui .pekppp-sidebar.collapsed .accordion-arrow {
     display: none;
 }
 

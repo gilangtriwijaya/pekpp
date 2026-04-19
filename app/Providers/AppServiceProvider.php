@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Queue;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -99,6 +100,33 @@ class AppServiceProvider extends ServiceProvider
                 'user_opd_name' => $user_opd_name,
                 'user_avatar_initial' => $user_avatar_initial,
             ]);
+        });
+
+        // Inject a lightweight scope_context into job payloads when jobs are pushed.
+        // This ensures background jobs have traceable tenant/user context without
+        // modifying every job constructor.
+        Queue::createPayloadUsing(function () {
+            try {
+                $user = Auth::user();
+                if (! $user) return [];
+
+                $roles = [];
+                if (method_exists($user, 'getRoleNames')) {
+                    $roles = $user->getRoleNames()->toArray();
+                }
+
+                return [
+                    'scope_context' => [
+                        'tenant_id' => $user->tenant_id ?? $user->tenantId ?? null,
+                        'user_id' => $user->id ?? null,
+                        'roles' => $roles,
+                        'scope_key' => null,
+                        'correlation_id' => null,
+                    ],
+                ];
+            } catch (\Throwable $e) {
+                return [];
+            }
         });
     }
 }

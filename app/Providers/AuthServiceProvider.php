@@ -6,11 +6,14 @@ use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvid
 use Illuminate\Support\Facades\Gate;
 use App\Models\F01Pengisian;
 use App\Policies\F01PengisianPolicy;
+use App\Models\AnalyticsExport;
+use App\Policies\AnalyticsExportPolicy;
 
 class AuthServiceProvider extends ServiceProvider
 {
     protected $policies = [
         F01Pengisian::class => F01PengisianPolicy::class,
+        AnalyticsExport::class => AnalyticsExportPolicy::class,
     ];
 
     public function boot(): void

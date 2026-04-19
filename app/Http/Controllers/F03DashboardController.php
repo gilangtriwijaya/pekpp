@@ -20,7 +20,7 @@ class F03DashboardController extends Controller
     public function userDashboard(Request $request)
     {
         $user = $request->user();
-        
+
         // Get active periode
         $periode = \App\Models\Periode::where('is_aktif', 1)->first();
         if (!$periode) {
@@ -48,18 +48,18 @@ class F03DashboardController extends Controller
     public function uppDashboard(Request $request, $uppId, $periodeId)
     {
         $user = $request->user();
-        
+
         // Check authorization - ensure user has access to this UPP
         if (!$user->hasRole('superadmin')) {
             $hasAccess = $user->getUserUpps()->contains(function ($userUpp) use ($uppId) {
                 return (int)$userUpp->upp_id === (int)$uppId && (bool)$userUpp->aktif;
             });
-            
+
             if (!$hasAccess) {
                 abort(403, 'Anda tidak memiliki akses ke UPP ini.');
             }
         }
-        
+
         $upp = Upp::findOrFail($uppId);
         $periode = \App\Models\Periode::findOrFail($periodeId);
 
@@ -169,15 +169,18 @@ class F03DashboardController extends Controller
         // Calculate averages and build rankings
         foreach ($uppScoreMap as $data) {
             $avgScore = $data['response_count'] > 0 ? $data['total_score'] / $data['response_count'] : 0;
-            
+            $targetResponden = (int) ($data['target_responden'] ?? 0);
+            $targetMet = $targetResponden <= 0 || (int) $data['total_responses'] >= $targetResponden;
+            $effectiveScore = $targetMet ? $avgScore : 0;
+
             $rankingItem = [
                 'upp_id' => $data['upp_id'],
                 'upp_nama' => $data['upp_nama'],
                 'upp_kode' => $data['upp_kode'],
                 'total_responses' => $data['total_responses'],
-                'average_score' => round($avgScore, 2),
-                'target_responden' => $data['target_responden'],
-                'target_met' => $data['total_responses'] >= $data['target_responden']
+                'average_score' => round($effectiveScore, 2),
+                'target_responden' => $targetResponden,
+                'target_met' => $targetMet
             ];
 
             if ($rankingItem['target_met']) {
@@ -197,35 +200,39 @@ class F03DashboardController extends Controller
             return $b['total_responses'] <=> $a['total_responses'];
         });
 
+        $averageScore = count($rankings) > 0
+            ? collect($rankings)->avg('average_score')
+            : 0;
+
         $totalUpps = count($rankings);
 
         // ===== F02 DATA =====
         $f02UppFilter = $request->query('f02_upp_id', 'all');
-        
+
         // Get F02 aspek scores per UPP
         $f02Data = [];
-        
+
         $f02Query = F02Validasi::where('status', 'selesai')
             ->with(['f01Pengisian.upp', 'periode']);
-            
+
         if ($periodeId) {
             $f02Query->where('periode_id', $periodeId);
         }
-        
+
         $f02Validasis = $f02Query->get();
-        
+
         // Get all aspeks for periods
         $aspeksF02 = Aspek::all();
-        
+
         // Build F02 UPP scores with aspek breakdown
         $f02UppScores = [];
         $validasiByUpp = [];
-        
+
         // Group validasi by UPP
         foreach ($f02Validasis as $validasi) {
             $upp = $validasi->f01Pengisian?->upp;
             if (!$upp) continue;
-            
+
             $uppId = $upp->id;
             if (!isset($validasiByUpp[$uppId])) {
                 $validasiByUpp[$uppId] = [
@@ -235,13 +242,13 @@ class F03DashboardController extends Controller
             }
             $validasiByUpp[$uppId]['validasis'][] = $validasi;
         }
-        
+
         // Calculate aspek scores for each UPP
         foreach ($validasiByUpp as $uppId => $data) {
             $upp = $data['upp'];
             $uppValidasis = $data['validasis'];
             $validasiIds = array_map(fn($v) => $v->id, $uppValidasis);
-            
+
             $f02UppScores[$uppId] = [
                 'upp_id' => $uppId,
                 'upp_nama' => $upp->nama,
@@ -249,37 +256,37 @@ class F03DashboardController extends Controller
                 'aspek_scores' => [],
                 'total_nilai' => $uppValidasis[0]->total_nilai ?? 0
             ];
-            
+
             // Calculate aspek scores for this UPP
             foreach ($aspeksF02 as $aspek) {
                 $indikatorIds = $aspek->indikator()->pluck('id')->toArray();
-                
+
                 // Get avg nilai for this aspek within this UPP's validasi
                 $avgScore = F02IndikatorValidasi::whereIn('indikator_id', $indikatorIds)
                     ->whereIn('f02_validasi_id', $validasiIds)
                     ->avg('nilai') ?? 0;
-                
+
                 $f02UppScores[$uppId]['aspek_scores'][$aspek->nama] = round($avgScore, 2);
             }
         }
-        
+
         // Get F02 skor per aspek (global average across all UPPs)
         $f02AspekScores = [];
         foreach ($aspeksF02 as $aspek) {
             $indikatorIds = $aspek->indikator()->pluck('id')->toArray();
-            
+
             // Get avg nilai for this aspek across all validasi
             $avgScore = F02IndikatorValidasi::whereIn('indikator_id', $indikatorIds)
                 ->avg('nilai') ?? 0;
-            
+
             $f02AspekScores[$aspek->nama] = round($avgScore, 2);
         }
-        
+
         // F02 data for chart
         $f02AverageScore = F02Validasi::where('status', 'selesai')
             ->when($periodeId, fn($q) => $q->where('periode_id', $periodeId))
             ->avg('total_nilai') ?? 0;
-            
+
         $f02TotalValidasi = F02Validasi::where('status', 'selesai')
             ->when($periodeId, fn($q) => $q->where('periode_id', $periodeId))
             ->count();
@@ -377,12 +384,12 @@ class F03DashboardController extends Controller
     {
         try {
             $token = F03Token::findOrFail($tokenId);
-            
+
             // Generate QR code if not exists
             if (!$token->qr_code) {
                 $token->generateQrCode();
             }
-            
+
             return response()->json([
                 'success' => true,
                 'qr_code' => $token->qr_code ?: null,
