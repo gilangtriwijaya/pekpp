@@ -118,85 +118,92 @@ class F03DashboardController extends Controller
     {
         $periodeId = $request->query('periode_id');
 
-        // Get all periodes for filter
-        $periodes = \App\Models\Periode::all();
+        // Get all periodes for filter dropdown
+        $periodes = \App\Models\Periode::orderBy('tahun', 'desc')->get();
 
-        // Build rankings per UPP
-        $rankings = [];
-        $totalResponses = F03Pengisian::count();
-        $averageScore = F03Jawaban::avg('score') ?? 0;
-        $targetMetCount = 0;
-        $allTokens = [];
+        // Default to active periode if no filter given
+        if (!$periodeId) {
+            $aktivePeriode = \App\Models\Periode::where('is_aktif', true)->first()
+                ?? $periodes->first();
+            if ($aktivePeriode) {
+                return redirect()->route('admin.f03.dashboard.admin', ['periode_id' => $aktivePeriode->id]);
+            }
+        }
 
-        // Get tokens based on periode filter
-        $tokensQuery = F03Token::with(['upp', 'periode']);
+        // Resolve target_responden_f03 for selected periode
+        $selectedPeriode = $periodeId
+            ? \App\Models\Periode::find($periodeId)
+            : $periodes->first();
+        $targetResponden = (int) ($selectedPeriode?->target_responden_f03 ?? 0);
+
+        // ── Source of truth: ALL active UPPs from upps table ──────────────
+        $allUpps = Upp::where('aktif', true)->orderBy('nama')->get();
+
+        // Pre-load tokens for selected periode (or all if no filter)
+        $tokensQuery = F03Token::query();
         if ($periodeId) {
             $tokensQuery->where('periode_id', $periodeId);
         }
-        $allTokens = $tokensQuery->get();
+        // Key by upp_id for O(1) lookup
+        $tokensByUpp = $tokensQuery->get()->keyBy('upp_id');
 
-        // Build UPP rankings
-        $uppScoreMap = [];
-        foreach ($allTokens as $token) {
-            $uppId = $token->upp_id;
-            $upp = $token->upp;
-            $periode = $token->periode;
+        // Pre-load all pengisian IDs grouped by token
+        $tokenIds     = $tokensByUpp->pluck('id')->toArray();
+        $totalResponses = F03Pengisian::whereIn('f03_token_id', $tokenIds)->count();
 
-            if (!isset($uppScoreMap[$uppId])) {
-                $uppScoreMap[$uppId] = [
-                    'upp_id' => $uppId,
-                    'upp_nama' => $upp->nama ?? 'Unknown',
-                    'upp_kode' => $upp->kode ?? '',
-                    'total_responses' => 0,
-                    'total_score' => 0,
-                    'response_count' => 0,
-                    'target_responden' => $periode->target_responden_f03 ?? 0,
-                    'target_met' => false
-                ];
+        // Group pengisian by token_id for bulk score query
+        $pengisianByToken = F03Pengisian::whereIn('f03_token_id', $tokenIds)
+            ->select('id', 'f03_token_id')
+            ->get()
+            ->groupBy('f03_token_id');
+
+        // Pre-load avg score per token in one query
+        $avgScoreByToken = [];
+        foreach ($tokenIds as $tid) {
+            $pengisianIds = ($pengisianByToken[$tid] ?? collect())->pluck('id')->toArray();
+            if (empty($pengisianIds)) {
+                $avgScoreByToken[$tid] = 0;
+            } else {
+                $avgScoreByToken[$tid] = (float) (F03Jawaban::whereIn('f03_pengisian_id', $pengisianIds)->avg('score') ?? 0);
             }
-
-            // Get responses for this token
-            $tokenResponses = F03Pengisian::where('f03_token_id', $token->id)->get();
-            $responseCount = $tokenResponses->count();
-            $uppScoreMap[$uppId]['total_responses'] += $responseCount;
-            $uppScoreMap[$uppId]['response_count']++;
-
-            // Get average score for this token
-            $tokenJawabanScores = F03Jawaban::whereIn('f03_pengisian_id', $tokenResponses->pluck('id'))->avg('score') ?? 0;
-            $uppScoreMap[$uppId]['total_score'] += $tokenJawabanScores;
         }
 
-        // Calculate averages and build rankings
-        foreach ($uppScoreMap as $data) {
-            $avgScore = $data['response_count'] > 0 ? $data['total_score'] / $data['response_count'] : 0;
-            $targetResponden = (int) ($data['target_responden'] ?? 0);
-            $targetMet = $targetResponden <= 0 || (int) $data['total_responses'] >= $targetResponden;
-            $effectiveScore = $targetMet ? $avgScore : 0;
+        // Build rankings — every UPP appears
+        $rankings       = [];
+        $targetMetCount = 0;
+
+        foreach ($allUpps as $upp) {
+            $token         = $tokensByUpp->get($upp->id);
+            $tokenId       = $token?->id;
+            $responseCount = $tokenId ? ($pengisianByToken[$tokenId] ?? collect())->count() : 0;
+            $avgScore      = $tokenId ? ($avgScoreByToken[$tokenId] ?? 0) : 0;
+
+            $targetMet      = $targetResponden <= 0 || $responseCount >= $targetResponden;
+            $effectiveScore = $targetMet ? round($avgScore, 2) : 0;
 
             $rankingItem = [
-                'upp_id' => $data['upp_id'],
-                'upp_nama' => $data['upp_nama'],
-                'upp_kode' => $data['upp_kode'],
-                'total_responses' => $data['total_responses'],
-                'average_score' => round($effectiveScore, 2),
+                'upp_id'           => $upp->id,
+                'upp_nama'         => $upp->nama,
+                'upp_kode'         => $upp->kode ?? '',
+                'total_responses'  => $responseCount,
+                'average_score'    => $effectiveScore,
                 'target_responden' => $targetResponden,
-                'target_met' => $targetMet
+                'target_met'       => $targetMet,
+                'has_token'        => !is_null($token),
             ];
 
-            if ($rankingItem['target_met']) {
+            if ($targetMet) {
                 $targetMetCount++;
             }
 
             $rankings[] = $rankingItem;
         }
 
-        // Sort by score desc, then by response count desc as tie-breaker
-        usort($rankings, function($a, $b) {
-            // Primary: Sort by average score descending
+        // Sort by score desc, then response count desc as tie-breaker
+        usort($rankings, function ($a, $b) {
             if ($b['average_score'] != $a['average_score']) {
                 return $b['average_score'] <=> $a['average_score'];
             }
-            // Secondary: If scores equal, sort by response count descending (more responses = higher rank)
             return $b['total_responses'] <=> $a['total_responses'];
         });
 
@@ -205,6 +212,17 @@ class F03DashboardController extends Controller
             : 0;
 
         $totalUpps = count($rankings);
+
+        // Split for modal display
+        $targetMetUpps    = array_values(array_filter($rankings, fn($r) => $r['target_met']));
+        $targetNotMetUpps = array_values(array_filter($rankings, fn($r) => !$r['target_met']));
+
+        $avgScoreMet    = count($targetMetUpps) > 0
+            ? round(collect($targetMetUpps)->avg('average_score'), 2)
+            : 0;
+        $avgScoreNotMet = count($targetNotMetUpps) > 0
+            ? round(collect($targetNotMetUpps)->avg('average_score'), 2)
+            : 0;
 
         // ===== F02 DATA =====
         $f02UppFilter = $request->query('f02_upp_id', 'all');
@@ -272,12 +290,18 @@ class F03DashboardController extends Controller
 
         // Get F02 skor per aspek (global average across all UPPs)
         $f02AspekScores = [];
+        $allValidasiIds = $f02Validasis->pluck('id')->toArray();
+
         foreach ($aspeksF02 as $aspek) {
             $indikatorIds = $aspek->indikator()->pluck('id')->toArray();
 
-            // Get avg nilai for this aspek across all validasi
-            $avgScore = F02IndikatorValidasi::whereIn('indikator_id', $indikatorIds)
-                ->avg('nilai') ?? 0;
+            // Get avg nilai for this aspek across validasi in this period
+            $avgScore = 0;
+            if (!empty($allValidasiIds)) {
+                $avgScore = F02IndikatorValidasi::whereIn('indikator_id', $indikatorIds)
+                    ->whereIn('f02_validasi_id', $allValidasiIds)
+                    ->avg('nilai') ?? 0;
+            }
 
             $f02AspekScores[$aspek->nama] = round($avgScore, 2);
         }
@@ -304,7 +328,11 @@ class F03DashboardController extends Controller
             'f02TotalValidasi',
             'f02UppScores',
             'f02UppFilter',
-            'aspeksF02'
+            'aspeksF02',
+            'targetMetUpps',
+            'targetNotMetUpps',
+            'avgScoreMet',
+            'avgScoreNotMet'
         ));
     }
 

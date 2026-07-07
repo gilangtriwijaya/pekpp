@@ -23,20 +23,49 @@ class F03PublicController extends Controller
 
         // Check if token is active
         if (!$tokenRecord->aktif) {
-            return view('f03.public.error', ['message' => 'Token tidak aktif']);
+            return view('f03.public.error', [
+                'title' => 'Tautan Tidak Aktif',
+                'icon' => '🚫',
+                'message' => 'Token tidak aktif atau telah dinonaktifkan.'
+            ]);
         }
 
         // Check if expired
         if ($tokenRecord->isExpired()) {
-            return view('f03.public.error', ['message' => 'Token sudah kadaluarsa']);
+            return view('f03.public.error', [
+                'title' => 'Tautan Kadaluarsa',
+                'icon' => '⏳',
+                'message' => 'Token sudah kadaluarsa dan tidak dapat digunakan lagi.'
+            ]);
         }
 
         // Check if periode is accepting input
         if ($tokenRecord->periode && $tokenRecord->periode->status_pengisian !== 'open') {
-            $statusMessage = $tokenRecord->periode->status_pengisian === 'locked' 
+            $isLocked = $tokenRecord->periode->status_pengisian === 'locked';
+            $statusMessage = $isLocked 
                 ? 'Periode ini sedang dikunci dan tidak menerima respons baru. Hubungi administrator jika ada pertanyaan.'
                 : 'Periode ini telah ditutup dan tidak menerima respons baru. Hubungi administrator jika ada pertanyaan.';
-            return view('f03.public.error', ['message' => $statusMessage]);
+            return view('f03.public.error', [
+                'title' => $isLocked ? 'Periode Dikunci' : 'Periode Ditutup',
+                'icon' => '🔒',
+                'message' => $statusMessage
+            ]);
+        }
+
+        // Check respondent quota
+        $targetResponden = $tokenRecord->periode->target_responden_f03 ?? 0;
+        if ($targetResponden > 0) {
+            $currentResponden = F03Pengisian::where('upp_id', $tokenRecord->upp_id)
+                ->where('periode_id', $tokenRecord->periode_id)
+                ->count();
+                
+            if ($currentResponden >= $targetResponden) {
+                return view('f03.public.error', [
+                    'title' => 'Target Responden Terpenuhi',
+                    'icon' => '✅',
+                    'message' => "Terima kasih atas partisipasi Anda. Pengisian kuesioner F03 telah selesai karena target minimal jumlah responden untuk unit ini telah terpenuhi."
+                ]);
+            }
         }
 
         // Check if user already responded (anti-duplicate check)
@@ -53,7 +82,11 @@ class F03PublicController extends Controller
         ]);
 
         if ($existing && !$tokenRecord->allow_multiple_responses) {
-            return view('f03.public.error', ['message' => 'Anda sudah memberikan respons sebelumnya. Responden tidak dapat mengisi ulang.']);
+            return view('f03.public.error', [
+                'title' => 'Sudah Mengisi',
+                'icon' => 'ℹ️',
+                'message' => 'Anda sudah memberikan respons sebelumnya. Responden tidak dapat mengisi ulang.'
+            ]);
         }
 
         // Load aspeks with indikators
@@ -84,6 +117,18 @@ class F03PublicController extends Controller
         // Check if periode is accepting input
         if ($tokenRecord->periode && $tokenRecord->periode->status_pengisian !== 'open') {
             return response()->json(['error' => 'Periode ini tidak menerima respons baru'], 422);
+        }
+
+        // Check respondent quota
+        $targetResponden = $tokenRecord->periode->target_responden_f03 ?? 0;
+        if ($targetResponden > 0) {
+            $currentResponden = F03Pengisian::where('upp_id', $tokenRecord->upp_id)
+                ->where('periode_id', $tokenRecord->periode_id)
+                ->count();
+                
+            if ($currentResponden >= $targetResponden) {
+                return response()->json(['error' => 'Pengisian kuesioner telah selesai karena target minimal jumlah responden untuk unit ini telah terpenuhi.'], 422);
+            }
         }
 
         // Validate demographic data

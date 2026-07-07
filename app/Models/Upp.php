@@ -68,14 +68,18 @@ class Upp extends Model
         return $this->hasMany(F03Pengisian::class, 'upp_id');
     }
 
+    public function f01Pengisian()
+    {
+        return $this->hasMany(F01Pengisian::class, 'upp_id');
+    }
+
     // status constants
     public const STATUS_AKTIF = 'AKTIF';
     public const STATUS_NONAKTIF = 'NONAKTIF';
 
-    // Scopes
     public function scopeAktif($q)
     {
-        return $q->where('status', self::STATUS_AKTIF);
+        return $q->where('aktif', 1);
     }
 
     public function scopeOpd($q)

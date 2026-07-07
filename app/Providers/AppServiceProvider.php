@@ -2,11 +2,17 @@
 
 namespace App\Providers;
 
+use App\Models\F01Pengisian;
+use App\Models\F02Validasi;
+use App\Observers\StatistikPublikObserver;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -23,6 +29,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        RateLimiter::for('publik', function (Request $request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
         // Provide a small set of globals used by many Blade templates to
         // avoid "Undefined variable" errors when controllers don't pass them.
         // Share the authenticated user object with views. Avoid sharing a Closure
@@ -128,5 +138,8 @@ class AppServiceProvider extends ServiceProvider
                 return [];
             }
         });
+
+        F01Pengisian::observe(StatistikPublikObserver::class);
+        F02Validasi::observe(StatistikPublikObserver::class);
     }
 }

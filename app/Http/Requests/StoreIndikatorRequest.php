@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreIndikatorRequest extends FormRequest
 {
@@ -13,10 +14,15 @@ class StoreIndikatorRequest extends FormRequest
 
     public function rules()
     {
+        $aspekId = $this->input('aspek_id') ?? $this->route('indikator')?->aspek_id;
+
         $rules = [
             'aspek_id' => ['required', 'integer', 'exists:aspek,id'],
             'nama' => ['required', 'string', 'max:500'],
-            'kode' => ['nullable', 'string', 'max:50', 'unique:indikator,kode'],
+            'kode' => [
+                'nullable', 'string', 'max:50',
+                Rule::unique('indikator', 'kode')->where('aspek_id', $aspekId),
+            ],
             'deskripsi' => ['nullable', 'string', 'max:5000'],
             'bukti_dukung' => ['nullable', 'string', 'max:2000'],
             'bobot' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -26,7 +32,11 @@ class StoreIndikatorRequest extends FormRequest
         
         // For update, exclude current record from unique check
         if ($this->method() === 'PUT' && $this->route('indikator')) {
-            $rules['kode'] = ['nullable', 'string', 'max:50', 'unique:indikator,kode,' . $this->route('indikator')->id];
+            $indikatorId = $this->route('indikator')->id;
+            $rules['kode'] = [
+                'nullable', 'string', 'max:50',
+                Rule::unique('indikator', 'kode')->where('aspek_id', $aspekId)->ignore($indikatorId),
+            ];
         }
         
         return $rules;
@@ -43,7 +53,7 @@ class StoreIndikatorRequest extends FormRequest
             'nama.max' => 'Nama Indikator maksimal 500 karakter',
             'kode.string' => 'Kode harus berupa teks',
             'kode.max' => 'Kode maksimal 50 karakter',
-            'kode.unique' => 'Kode Indikator sudah ada, gunakan kode yang berbeda',
+            'kode.unique' => 'Kode Indikator sudah ada di aspek ini pada periode yang sama, gunakan kode yang berbeda',
             'deskripsi.string' => 'Deskripsi harus berupa teks',
             'deskripsi.max' => 'Deskripsi maksimal 2000 karakter',
             'bukti_dukung.string' => 'Bukti Dukung harus berupa teks',

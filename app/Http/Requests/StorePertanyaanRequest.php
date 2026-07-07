@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StorePertanyaanRequest extends FormRequest
 {
@@ -13,9 +14,14 @@ class StorePertanyaanRequest extends FormRequest
 
     public function rules()
     {
+        $indikatorId = $this->input('indikator_id');
+
         $rules = [
             'indikator_id' => ['required','integer','exists:indikator,id'],
-            'kode' => ['required','string','max:50','unique:pertanyaan,kode'],
+            'kode' => [
+                'required','string','max:50',
+                Rule::unique('pertanyaan', 'kode')->where('indikator_id', $indikatorId),
+            ],
             'label' => ['required','string'],
             'tipe_input' => ['required','in:text,textarea,number,radio,checkbox,select,yesno,skala'],
             'opsi_jawaban' => ['nullable','array'],
@@ -30,7 +36,10 @@ class StorePertanyaanRequest extends FormRequest
         
         // For update, exclude current record from unique check
         if ($this->method() === 'PUT' && $this->route('pertanyaan')) {
-            $rules['kode'] = ['required','string','max:50','unique:pertanyaan,kode,' . $this->route('pertanyaan')->id];
+            $rules['kode'] = [
+                'required','string','max:50',
+                Rule::unique('pertanyaan', 'kode')->where('indikator_id', $indikatorId)->ignore($this->route('pertanyaan')->id),
+            ];
         }
         
         return $rules;
@@ -45,7 +54,7 @@ class StorePertanyaanRequest extends FormRequest
             'kode.required' => 'Kode Pertanyaan wajib diisi',
             'kode.string' => 'Kode harus berupa teks',
             'kode.max' => 'Kode maksimal 50 karakter',
-            'kode.unique' => 'Kode Pertanyaan sudah ada, gunakan kode yang berbeda',
+            'kode.unique' => 'Kode Pertanyaan sudah ada di indikator ini, gunakan kode yang berbeda',
             'label.required' => 'Label Pertanyaan wajib diisi',
             'label.string' => 'Label harus berupa teks',
             'tipe_input.required' => 'Tipe Input wajib dipilih',

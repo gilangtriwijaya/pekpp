@@ -9,7 +9,15 @@ class F01IndikatorNilai extends Model
     protected $table = 'f01_indikator_nilai';
 
     protected $fillable = [
-        'f01_pengisian_id', 'indikator_id', 'nilai', 'justifikasi', 'status'
+        'f01_pengisian_id',        'indikator_id',
+        'nilai',
+        'justifikasi',
+        'status',
+        'is_changed'
+    ];
+
+    protected $casts = [
+        'is_changed' => 'boolean'
     ];
 
     public $timestamps = true;

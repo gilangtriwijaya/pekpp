@@ -35,6 +35,20 @@
         'tableId' => 'f03aspekTable'
     ])
     
+    <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; justify-content: flex-end; background: white; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <form method="GET" action="{{ route('admin.f03.aspek.index') }}" style="display: flex; gap: 0.75rem; align-items: center;">
+            <label for="filter_periode" style="font-size: 14px; font-weight: 500; color: #475569;">Filter Periode:</label>
+            <select name="periode_id" id="filter_periode" style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; min-width: 200px; outline: none; transition: border-color 0.2s;" onchange="this.form.submit()" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#cbd5e1'">
+                <option value="">Semua Periode</option>
+                @foreach($periodes as $p)
+                    <option value="{{ $p->id }}" {{ (isset($selectedPeriodeId) && $selectedPeriodeId == $p->id) ? 'selected' : '' }}>
+                        {{ $p->nama }} ({{ $p->tahun }}) {{ $p->is_aktif ? '✓' : '' }}
+                    </option>
+                @endforeach
+            </select>
+        </form>
+    </div>
+    
     <table class="f03aspek-table" id="f03aspekTable">
         <thead>
             <tr>

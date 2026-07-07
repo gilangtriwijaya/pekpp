@@ -33,7 +33,20 @@ class F01PertanyaanController extends Controller
 
     public function index(Request $request)
     {
+        $periodes = \App\Models\Periode::orderBy('tahun', 'desc')->orderBy('nama', 'asc')->get();
+        
+        $periodeAktif = \App\Models\Periode::where('is_aktif', 1)->first();
+        $selectedPeriodeId = $request->filled('periode_id')
+            ? $request->input('periode_id')
+            : ($periodeAktif ? $periodeAktif->id : null);
+
         $query = Pertanyaan::with('indikator');
+
+        if ($selectedPeriodeId) {
+            $query->whereHas('indikator.aspek', function($q) use ($selectedPeriodeId) {
+                $q->where('periode_id', $selectedPeriodeId);
+            });
+        }
 
         if ($request->filled('indikator_id')) {
             $query->where('indikator_id', $request->input('indikator_id'));
@@ -79,11 +92,23 @@ class F01PertanyaanController extends Controller
         // Ensure select includes pertanyaan columns to avoid conflicts
         $query->select('pertanyaan.*');
 
-        $pertanyaan = $query->paginate(50);
-        $aspeks = Aspek::orderBy('kode', 'asc')->get();
-        $indikators = Indikator::with('aspek')->orderBy('urutan', 'asc')->get();
+        $pertanyaan = $query->paginate(50)->withQueryString();
+        
+        $aspeksQuery = Aspek::orderBy('kode', 'asc');
+        if ($selectedPeriodeId) {
+            $aspeksQuery->where('periode_id', $selectedPeriodeId);
+        }
+        $aspeks = $aspeksQuery->get();
+        
+        $indikatorsQuery = Indikator::with('aspek')->orderBy('urutan', 'asc');
+        if ($selectedPeriodeId) {
+            $indikatorsQuery->whereHas('aspek', function($q) use ($selectedPeriodeId) {
+                $q->where('periode_id', $selectedPeriodeId);
+            });
+        }
+        $indikators = $indikatorsQuery->get();
 
-        return view('f01.pertanyaan.index', compact('pertanyaan', 'aspeks', 'indikators'));
+        return view('f01.pertanyaan.index', compact('pertanyaan', 'aspeks', 'indikators', 'periodes', 'selectedPeriodeId'));
     }
 
     /**

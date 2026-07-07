@@ -35,7 +35,7 @@ class F03TokenController extends Controller
 
             // Get ALL UPPs with their token status for selected periode
             // LEFT JOIN to show UPPs even if they don't have a token yet
-            $uppsWithStatus = Upp::leftJoin(
+            $uppsWithStatusQuery = Upp::leftJoin(
                 'f03_token',
                 function ($join) use ($selectedPeriode) {
                     $join->on('upps.id', '=', 'f03_token.upp_id')
@@ -43,8 +43,13 @@ class F03TokenController extends Controller
                 }
             )
             ->where('upps.aktif', true)
-            ->select('upps.*', 'f03_token.id as token_id', 'f03_token.token', 'f03_token.aktif as token_aktif')
-            ->orderBy('upps.nama', 'asc')
+            ->select('upps.*', 'f03_token.id as token_id', 'f03_token.token', 'f03_token.aktif as token_aktif');
+
+            $totalUpp = (clone $uppsWithStatusQuery)->count();
+            $totalAktif = (clone $uppsWithStatusQuery)->where('f03_token.aktif', true)->count();
+            $totalRevoke = (clone $uppsWithStatusQuery)->where('f03_token.aktif', false)->whereNotNull('f03_token.id')->count();
+
+            $uppsWithStatus = (clone $uppsWithStatusQuery)->orderBy('upps.nama', 'asc')
             ->paginate(50);
 
         } else {
@@ -52,7 +57,7 @@ class F03TokenController extends Controller
             abort(403);
         }
 
-        return view('f03.token.index', compact('uppsWithStatus', 'periodes', 'selectedPeriode'));
+        return view('f03.token.index', compact('uppsWithStatus', 'periodes', 'selectedPeriode', 'totalUpp', 'totalAktif', 'totalRevoke'));
 
     }
 
@@ -207,6 +212,22 @@ class F03TokenController extends Controller
             'success' => true,
             'message' => 'Pengaturan token berhasil diubah',
             'allow_multiple_responses' => $token->allow_multiple_responses
+        ]);
+    }
+
+    public function updateGlobalSettings(Request $request)
+    {
+        $validated = $request->validate([
+            'periode_id' => 'required|exists:periode,id',
+            'allow_multiple_responses' => 'required|boolean',
+        ]);
+
+        $updatedCount = F03Token::where('periode_id', $validated['periode_id'])
+            ->update(['allow_multiple_responses' => $validated['allow_multiple_responses']]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "Pengaturan berhasil diubah secara global. ({$updatedCount} token diperbarui)"
         ]);
     }
 

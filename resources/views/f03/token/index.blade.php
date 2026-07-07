@@ -104,6 +104,40 @@
         color: var(--neutral-600);
     }
 
+    /* Summary Cards */
+    .f03token-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 24px;
+    }
+
+    .f03token-summary-card {
+        background: white;
+        padding: 20px 24px;
+        border-radius: 12px;
+        border: 1px solid var(--neutral-200);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .f03token-summary-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: var(--neutral-600);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .f03token-summary-value {
+        font-size: 32px;
+        font-weight: 700;
+        color: var(--neutral-900);
+        line-height: 1;
+    }
+
     /* Filter Section */
     .f03token-filter {
         background: white;
@@ -563,10 +597,30 @@
             <p style="color: var(--neutral-600); margin-top: 8px;">Kelola token kuesioner publik F03 untuk setiap UPP per periode</p>
         </div>
         <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+            <!-- Button Pengaturan Global -->
+            <button class="f03token-btn-action" onclick="showGlobalSettingsModal()" style="white-space: nowrap; margin-top: 0; height: fit-content; border-color: var(--primary); color: var(--primary);">
+                ⚙️ Pengaturan Global
+            </button>
             <!-- Button Generate Semua -->
             <button class="f03token-btn" onclick="generateAllTokens()" style="white-space: nowrap; margin-top: 0; height: fit-content;">
                 ⚡ Generate Semua
             </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="f03token-summary">
+        <div class="f03token-summary-card">
+            <span class="f03token-summary-title">Total UPP</span>
+            <span class="f03token-summary-value">{{ number_format($totalUpp ?? 0) }}</span>
+        </div>
+        <div class="f03token-summary-card" style="border-bottom: 4px solid var(--success);">
+            <span class="f03token-summary-title">Token Aktif</span>
+            <span class="f03token-summary-value" style="color: var(--success);">{{ number_format($totalAktif ?? 0) }}</span>
+        </div>
+        <div class="f03token-summary-card" style="border-bottom: 4px solid var(--danger);">
+            <span class="f03token-summary-title">Token Revoke</span>
+            <span class="f03token-summary-value" style="color: var(--danger);">{{ number_format($totalRevoke ?? 0) }}</span>
         </div>
     </div>
 
@@ -813,6 +867,40 @@
     </div>
 </div>
 
+<!-- Modal: Global Settings -->
+<div id="globalSettingsModal" class="f03token-modal">
+    <div class="f03token-modal-content">
+        <div class="f03token-modal-header">
+            <h2 class="f03token-modal-title">⚙️ Pengaturan Global</h2>
+        </div>
+        <div class="f03token-modal-body">
+            <p style="margin-bottom: 16px; color: #6B7280; font-size: 14px;">
+                Periode: <strong id="globalSettingsPeriodeName"></strong>
+            </p>
+            <div style="background-color: #FEF3C7; border: 1px solid #FCD34D; padding: 12px; border-radius: 6px; font-size: 13px; color: #78350F; margin-bottom: 16px;">
+                <strong>⚠️ Peringatan:</strong> Pengaturan ini akan mengubah pengaturan untuk <strong>semua token</strong> yang sudah ada pada periode ini.
+            </div>
+            <div style="background-color: #F3F4F6; padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+                <p style="font-size: 13px; color: #374151; margin-bottom: 12px; font-weight: 500;">⚙️ Pengaturan Pengisian Berulang</p>
+                <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;">
+                    <div>
+                        <p style="font-size: 13px; color: #374151; margin: 0; font-weight: 500;">Izinkan pengisian berulang?</p>
+                        <p style="font-size: 12px; color: #6B7280; margin: 4px 0 0 0;">Responden dapat mengisi dari perangkat/IP berbeda</p>
+                    </div>
+                    <label class="toggle-switch" style="margin: 0; margin-left: 12px;">
+                        <input type="checkbox" id="globalAllowMultipleToggle">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="f03token-modal-footer">
+            <button class="f03token-btn-action" onclick="closeModal('globalSettingsModal')">Batal</button>
+            <button class="f03token-btn" onclick="submitGlobalSettings()">Simpan Perubahan</button>
+        </div>
+    </div>
+</div>
+
 <!-- Toast -->
 <div class="f03token-toast" id="f03token-toast"></div>
 
@@ -918,12 +1006,10 @@
         const periodeName = selectedOption.text;
         document.getElementById('genBatchPeriodeName').textContent = periodeName;
         
-        // Count UPPs without token
-        const uppWithoutToken = Array.from(document.querySelectorAll('.f03token-row')).filter(row => {
-            return !row.getAttribute('data-id') || row.getAttribute('data-id') === '';
-        }).length;
+        // Count UPPs without token from backend totals
+        const uppWithoutToken = {{ ($totalUpp ?? 0) - (($totalAktif ?? 0) + ($totalRevoke ?? 0)) }};
         
-        document.getElementById('genBatchUppCount').textContent = uppWithoutToken;
+        document.getElementById('genBatchUppCount').textContent = uppWithoutToken + " (Semua Halaman)";
         
         // Restore toggle state dari localStorage
         const toggleElement = document.getElementById('genBatchAllowMultipleToggle');
@@ -995,6 +1081,85 @@
         .catch(err => {
             console.error('Fetch error:', err);
             showToast('Gagal generate token', 'error');
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        });
+    }
+
+    function showGlobalSettingsModal() {
+        const periodeSelect = document.getElementById('filterPeriode');
+        const periodeId = periodeSelect.value;
+        
+        if (!periodeId) {
+            showToast('Pilih periode terlebih dahulu', 'error');
+            return;
+        }
+
+        // Get active periode name
+        const selectedOption = periodeSelect.options[periodeSelect.selectedIndex];
+        const periodeName = selectedOption.text;
+        document.getElementById('globalSettingsPeriodeName').textContent = periodeName;
+        
+        // Restore toggle state dari localStorage atau default ke false
+        const toggleElement = document.getElementById('globalAllowMultipleToggle');
+        const saved = localStorage.getItem('f03_global_allow_multiple');
+        if (saved === 'true') {
+            toggleElement.checked = true;
+        } else {
+            toggleElement.checked = false;
+        }
+        
+        // Store periode ID
+        document.getElementById('globalSettingsModal').dataset.periodeId = periodeId;
+        
+        openModal('globalSettingsModal');
+    }
+
+    function submitGlobalSettings() {
+        const periodeId = document.getElementById('globalSettingsModal').dataset.periodeId;
+        
+        if (!periodeId) {
+            showToast('Periode tidak ditemukan', 'error');
+            return;
+        }
+        
+        const toggleElement = document.getElementById('globalAllowMultipleToggle');
+        const allowMultiple = toggleElement.checked;
+        
+        // Simpan state
+        localStorage.setItem('f03_global_allow_multiple', allowMultiple ? 'true' : 'false');
+        
+        const btn = event.target;
+        const originalContent = btn.innerHTML;
+        btn.innerHTML = '⏳ Menyimpan...';
+        btn.disabled = true;
+        
+        fetch('{{ route("admin.f03.token.updateGlobalSettings") }}', {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                periode_id: parseInt(periodeId),
+                allow_multiple_responses: allowMultiple ? 1 : 0
+            })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                showToast(data.message, 'success');
+                closeModal('globalSettingsModal');
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                showToast(data.error || 'Gagal mengubah pengaturan', 'error');
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('Gagal mengubah pengaturan', 'error');
             btn.innerHTML = originalContent;
             btn.disabled = false;
         });

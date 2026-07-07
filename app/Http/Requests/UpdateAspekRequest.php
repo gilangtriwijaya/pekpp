@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class UpdateAspekRequest extends FormRequest
 {
@@ -14,8 +15,13 @@ class UpdateAspekRequest extends FormRequest
     public function rules()
     {
         $aspekId = $this->route('aspek')?->id ?? null;
+        $periodeId = $this->route('aspek')?->periode_id ?? $this->input('periode_id');
+
         return [
-            'kode' => 'nullable|string|max:50',
+            'kode' => [
+                'nullable', 'string', 'max:50',
+                Rule::unique('aspek', 'kode')->where('periode_id', $periodeId)->ignore($aspekId),
+            ],
             'nama' => 'required|string|max:255',
             'domain' => 'required|in:internal,publik',
             'bobot' => 'required|numeric|min:0|max:100',
@@ -26,6 +32,7 @@ class UpdateAspekRequest extends FormRequest
     public function messages()
     {
         return [
+            'kode.unique' => 'Kode Aspek sudah digunakan di periode ini, gunakan kode yang berbeda.',
             'nama.required' => 'Nama aspek harus diisi.',
             'domain.required' => 'Domain harus dipilih.',
             'domain.in' => 'Domain harus salah satu dari: internal atau publik.',

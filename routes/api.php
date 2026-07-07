@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\F01PenilaianController;
 use App\Http\Controllers\F02ValidasiController;
 use App\Http\Controllers\Api\V1\AnalyticsExportController;
+use App\Http\Controllers\Api\StatistikPublikController;
 
 
 /**
@@ -33,8 +34,15 @@ Route::prefix('f01')->middleware(['auth:sanctum'])->group(function () {
      * GET /api/f01/{pengisianId}
      * Get specific pengisian with all answers
      */
-    Route::get('/{pengisianId}', [F01PenilaianController::class, 'show'])->name('f01.show');
+    Route::get('/{pengisianId}', [F01PenilaianController::class, 'show'])->name('f01.api.show');
 });
+
+Route::prefix('publik')
+    ->middleware(['throttle:publik', 'api.publik.key'])
+    ->group(function () {
+        Route::get('/statistik', [StatistikPublikController::class, 'show']);
+        Route::get('/health', [StatistikPublikController::class, 'health']);
+    });
 
 /**
  * F02 Validasi Dashboard API Routes

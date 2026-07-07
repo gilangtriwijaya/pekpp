@@ -112,6 +112,8 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
     Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () {
         Route::resource('periode', \App\Http\Controllers\PeriodeController::class);
         Route::post('periode/{periode}/toggle-aktif', [\App\Http\Controllers\PeriodeController::class, 'toggleAktif'])->name('periode.toggle-aktif');
+        Route::get('periode/{periode}/instrumen-tree', [\App\Http\Controllers\PeriodeController::class, 'getInstrumenTree'])->name('periode.instrumen-tree');
+        Route::post('periode/{periode}/salin-instrumen', [\App\Http\Controllers\PeriodeController::class, 'salinInstrumen'])->name('periode.salin-instrumen');
 
         // F03 Admin Management
         Route::prefix('f03')->name('f03.')->group(function () {
@@ -131,6 +133,7 @@ Route::middleware(['auth', EnsureUserUpp::class])->group(function() {
             Route::get('token', [\App\Http\Controllers\F03TokenController::class, 'index'])->name('token.index');
             Route::post('token/generate', [\App\Http\Controllers\F03TokenController::class, 'generateToken'])->name('token.generate');
             Route::post('token/generate-all', [\App\Http\Controllers\F03TokenController::class, 'generateAllTokens'])->name('token.generateAll');
+            Route::post('token/global-settings', [\App\Http\Controllers\F03TokenController::class, 'updateGlobalSettings'])->name('token.updateGlobalSettings');
             Route::post('token/{id}/revoke', [\App\Http\Controllers\F03TokenController::class, 'revoke'])->name('token.revoke');
             Route::post('token/{id}/activate', [\App\Http\Controllers\F03TokenController::class, 'activate'])->name('token.activate');
             Route::post('token/{id}/settings', [\App\Http\Controllers\F03TokenController::class, 'updateSettings'])->name('token.updateSettings');
@@ -178,6 +181,7 @@ Route::middleware(['auth'])->group(function() {
     Route::post('/f01/{pengisianId}/indikator/{indikatorId}/bukti', [\App\Http\Controllers\F01PengisianController::class, 'saveBukti'])->name('f01.indikator.bukti.save')->where(['pengisianId' => '[0-9]+', 'indikatorId' => '[0-9]+']);
     Route::get('/f01/{pengisianId}/indikator/{indikatorId}/bukti', [\App\Http\Controllers\F01PengisianController::class, 'getBukti'])->name('f01.indikator.bukti.get')->where(['pengisianId' => '[0-9]+', 'indikatorId' => '[0-9]+']);
     Route::delete('/f01/{pengisianId}/bukti/{buktiId}', [\App\Http\Controllers\F01PengisianController::class, 'deleteBukti'])->name('f01.indikator.bukti.delete')->where(['pengisianId' => '[0-9]+', 'buktiId' => '[0-9]+']);
+    Route::post('/f01/{pengisianId}/indikator/{indikatorId}/mark-changed', [\App\Http\Controllers\F01PengisianController::class, 'markIndikatorChanged'])->name('f01.indikator.mark-changed')->where(['pengisianId' => '[0-9]+', 'indikatorId' => '[0-9]+']);
 
     // F01 Per-Aspek Save routes (Phase 14)
     Route::post('/f01/{pengisianId}/aspek/{aspekId}/save', [\App\Http\Controllers\F01PengisianController::class, 'saveBuktiDanJawaban'])->name('f01.aspek.save')->where(['pengisianId' => '[0-9]+', 'aspekId' => '[0-9]+']);
@@ -201,7 +205,7 @@ Route::middleware(['auth'])->group(function() {
     // F02 Validasi routes
     Route::get('/f02', [\App\Http\Controllers\F02ValidasiController::class, 'index'])->name('f02.index');
     Route::get('/f02/export/progress', [\App\Http\Controllers\F02ValidasiController::class, 'exportProgressReport'])->name('f02.export.progress');
-    Route::get('/f02/{id}', [\App\Http\Controllers\F02ValidasiController::class, 'show'])->name('f02.show')->where('id', '[0-9]+');
+    Route::get('/f02/{id}/init', [\App\Http\Controllers\F02ValidasiController::class, 'initValidasi'])->name('f02.init-validasi')->where('id', '[0-9]+');
     Route::post('/f02/{id}/save', [\App\Http\Controllers\F02ValidasiController::class, 'save'])->name('f02.save')->where('id', '[0-9]+');
     Route::post('/f02/{id}/finalize', [\App\Http\Controllers\F02ValidasiController::class, 'finalize'])->name('f02.finalize')->where('id', '[0-9]+');
     Route::post('/f02/{id}/reject', [\App\Http\Controllers\F02ValidasiController::class, 'reject'])->name('f02.reject')->where('id', '[0-9]+');
@@ -240,6 +244,9 @@ Route::middleware(['auth'])->group(function() {
 
 Route::get('/dashboard', [\App\Http\Controllers\DashboardController::class, 'index'])
     ->middleware(['auth', EnsureUserUpp::class])->name('dashboard');
+
+Route::resource('pengumuman', \App\Http\Controllers\PengumumanController::class)
+    ->middleware(['auth', EnsureUserUpp::class]);
 
 Route::post('/dashboard/save-preferred-upps', [\App\Http\Controllers\DashboardController::class, 'savePreferredUpps'])
     ->middleware(['auth', EnsureUserUpp::class])->name('dashboard.save-preferred-upps');

@@ -147,6 +147,13 @@
           <span class="label">Dashboard</span>
         </a>
 
+        @if($isSuperadmin || $isAdminOrganisasi)
+          <a href="{{ route('pengumuman.index') }}" class="nav-item {{ $isActive('pengumuman') ? 'active' : '' }}" title="Kelola Pengumuman">
+            <span class="nav-icon">{!! $sidebarIcon('file') !!}</span>
+            <span class="label">Pengumuman</span>
+          </a>
+        @endif
+
         {{-- Activity Log: Superadmin only --}}
         @if($isSuperadmin)
           <a href="{{ url('/activity-logs') }}" class="nav-item {{ $isActive('activity-logs') ? 'active' : '' }}" title="Activity Logs">
@@ -155,6 +162,7 @@
           </a>
         @endif
       </div>
+
 
       {{-- ANALISIS & LAPORAN - Superadmin & Admin Organisasi --}}
       @if($isSuperadmin || $isAdminOrganisasi)

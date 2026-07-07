@@ -165,12 +165,129 @@
         padding: 40px;
         color: #9CA3AF;
     }
-    
+
+    /* Clickable stat card */
+    .f03-stat-card-clickable {
+        cursor: pointer;
+        transition: transform 0.18s, box-shadow 0.18s;
+    }
+    .f03-stat-card-clickable:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.13);
+    }
+    .f03-stat-card-clickable .f03-stat-click-hint {
+        font-size: 11px;
+        margin-top: 6px;
+        opacity: 0.7;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    /* Modal overlay */
+    .f03-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.5);
+        z-index: 10000;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+    .f03-modal-overlay.active { display: flex; }
+
+    .f03-modal-box {
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+        width: 100%;
+        max-width: 720px;
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+        animation: f03ModalIn 0.22s ease;
+    }
+    @keyframes f03ModalIn {
+        from { opacity: 0; transform: scale(0.93) translateY(16px); }
+        to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .f03-modal-header {
+        padding: 20px 24px 16px;
+        border-bottom: 1px solid #E5E7EB;
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .f03-modal-title { font-size: 18px; font-weight: 700; color: #1F2937; }
+    .f03-modal-subtitle { font-size: 13px; color: #6B7280; margin-top: 3px; }
+    .f03-modal-close {
+        background: none; border: none; cursor: pointer;
+        color: #9CA3AF; font-size: 22px; line-height: 1;
+        padding: 2px 6px; border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
+    }
+    .f03-modal-close:hover { color: #1F2937; background: #F3F4F6; }
+
+    .f03-modal-summary {
+        padding: 16px 24px;
+        border-bottom: 1px solid #F3F4F6;
+        display: flex;
+        gap: 24px;
+    }
+    .f03-modal-stat {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .f03-modal-stat-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; color: #9CA3AF; }
+    .f03-modal-stat-value { font-size: 22px; font-weight: 700; color: #1F2937; }
+
+    .f03-modal-body {
+        overflow-y: auto;
+        padding: 16px 24px 24px;
+        flex: 1;
+    }
+
+    .f03-modal-list { display: flex; flex-direction: column; gap: 10px; }
+    .f03-modal-item {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 12px 14px;
+        border: 1px solid #E5E7EB;
+        border-radius: 8px;
+        background: #F9FAFB;
+        transition: background 0.15s;
+    }
+    .f03-modal-item:hover { background: #F3F4F6; }
+    .f03-modal-item-rank {
+        font-size: 13px;
+        font-weight: 700;
+        color: #667eea;
+        min-width: 28px;
+        text-align: center;
+    }
+    .f03-modal-item-info { flex: 1; }
+    .f03-modal-item-name { font-size: 14px; font-weight: 600; color: #1F2937; }
+    .f03-modal-item-meta { font-size: 12px; color: #6B7280; margin-top: 2px; }
+    .f03-modal-item-score {
+        font-size: 15px;
+        font-weight: 700;
+        min-width: 70px;
+        text-align: right;
+    }
+    .score-met { color: #10B981; }
+    .score-notmet { color: #EF4444; }
+
     @media (max-width: 768px) {
         .f03-filter-section { flex-direction: column; align-items: stretch; }
         .f03-filter-input { width: 100%; }
         .f03-ranking-score { display: none; }
         .f03-ranking-item { flex-wrap: wrap; }
+        .f03-modal-summary { flex-wrap: wrap; gap: 14px; }
     }
 </style>
 
@@ -184,12 +301,11 @@
         <div class="f03-filter-group">
             <label class="f03-filter-label">Periode</label>
             <select id="periodeFilter" class="f03-filter-input" onchange="filterRankings()">
-                <option value="">Semua Periode</option>
-                @if($periodes ?? false)
-                    @foreach($periodes as $p)
-                    <option value="{{ $p->id }}">{{ $p->nama }} ({{ $p->tahun }})</option>
-                    @endforeach
-                @endif
+                @foreach($periodes as $p)
+                <option value="{{ $p->id }}" {{ (string)$p->id === (string)$periodeId ? 'selected' : '' }}>
+                    {{ $p->nama }} ({{ $p->tahun }}){{ $p->is_aktif ? ' ★ Aktif' : '' }}
+                </option>
+                @endforeach
             </select>
         </div>
         <button class="f03-filter-btn" onclick="filterRankings()">Terapkan Filter</button>
@@ -209,10 +325,17 @@
             <div class="f03-stat-label">Rata-rata Skor</div>
             <div class="f03-stat-value">{{ number_format($averageScore ?? 0, 2) }}</div>
         </div>
-        <div class="f03-stat-card">
-            <div class="f03-stat-label">Target Terpenuhi</div>
-            <div class="f03-stat-value">{{ $targetMetCount ?? 0 }} / {{ $totalUpps ?? 0 }}</div>
-            <div class="f03-stat-subtitle">{{ $totalUpps > 0 ? number_format(($targetMetCount ?? 0) / ($totalUpps ?? 1) * 100, 1) : 0 }}%</div>
+        <div class="f03-stat-card f03-stat-card-clickable" style="border-left-color: #10B981;" onclick="openModal('met')" title="Klik untuk lihat daftar UPP">
+            <div class="f03-stat-label">Memenuhi Standar</div>
+            <div class="f03-stat-value">{{ $targetMetCount ?? 0 }} <span style="font-size: 14px; font-weight: normal; color: #6B7280;">UPP</span></div>
+            <div class="f03-stat-subtitle" style="color: #10B981;">{{ $totalUpps > 0 ? number_format(($targetMetCount ?? 0) / ($totalUpps ?? 1) * 100, 1) : 0 }}% dari Total</div>
+            <div class="f03-stat-click-hint" style="color:#10B981;">🔍 Klik untuk detail</div>
+        </div>
+        <div class="f03-stat-card f03-stat-card-clickable" style="border-left-color: #EF4444;" onclick="openModal('notmet')" title="Klik untuk lihat daftar UPP">
+            <div class="f03-stat-label">Belum Memenuhi</div>
+            <div class="f03-stat-value">{{ ($totalUpps ?? 0) - ($targetMetCount ?? 0) }} <span style="font-size: 14px; font-weight: normal; color: #6B7280;">UPP</span></div>
+            <div class="f03-stat-subtitle" style="color: #EF4444;">{{ $totalUpps > 0 ? number_format((($totalUpps ?? 0) - ($targetMetCount ?? 0)) / ($totalUpps ?? 1) * 100, 1) : 0 }}% dari Total</div>
+            <div class="f03-stat-click-hint" style="color:#EF4444;">🔍 Klik untuk detail</div>
         </div>
     </div>
 
@@ -283,6 +406,100 @@
     </div>
 </div>
 
+{{-- ===== MODAL: Memenuhi Standar ===== --}}
+<div class="f03-modal-overlay" id="modal-met" onclick="closeModalOnBg(event, 'met')">
+    <div class="f03-modal-box">
+        <div class="f03-modal-header">
+            <div>
+                <div class="f03-modal-title">✅ UPP Memenuhi Standar</div>
+                <div class="f03-modal-subtitle">Daftar UPP yang telah memenuhi target responden</div>
+            </div>
+            <button class="f03-modal-close" onclick="closeModal('met')" aria-label="Tutup">&times;</button>
+        </div>
+        <div class="f03-modal-summary">
+            <div class="f03-modal-stat">
+                <span class="f03-modal-stat-label">Jumlah UPP</span>
+                <span class="f03-modal-stat-value" style="color:#10B981;">{{ count($targetMetUpps ?? []) }}</span>
+            </div>
+            <div class="f03-modal-stat">
+                <span class="f03-modal-stat-label">Rata-rata Total Skor</span>
+                <span class="f03-modal-stat-value" style="color:#667eea;">{{ number_format($avgScoreMet ?? 0, 2) }}<span style="font-size:13px;font-weight:400;color:#9CA3AF;">/5.00</span></span>
+            </div>
+        </div>
+        <div class="f03-modal-body">
+            @if(count($targetMetUpps ?? []) > 0)
+            <div class="f03-modal-list">
+                @foreach($targetMetUpps as $i => $item)
+                <div class="f03-modal-item">
+                    <div class="f03-modal-item-rank">#{{ $i + 1 }}</div>
+                    <div class="f03-modal-item-info">
+                        <div class="f03-modal-item-name">{{ $item['upp_nama'] }}</div>
+                        <div class="f03-modal-item-meta">
+                            {{ $item['total_responses'] }} respons
+                            @if(($item['target_responden'] ?? 0) > 0)
+                                &middot; Target: {{ $item['target_responden'] }}
+                                &middot; <span style="color:#10B981;font-weight:600;">✓ Terpenuhi</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="f03-modal-item-score score-met">{{ number_format($item['average_score'], 2) }}<span style="font-size:11px;font-weight:400;color:#9CA3AF;">/5.00</span></div>
+                </div>
+                @endforeach
+            </div>
+            @else
+            <div class="f03-empty-state">Tidak ada UPP yang memenuhi standar.</div>
+            @endif
+        </div>
+    </div>
+</div>
+
+{{-- ===== MODAL: Belum Memenuhi ===== --}}
+<div class="f03-modal-overlay" id="modal-notmet" onclick="closeModalOnBg(event, 'notmet')">
+    <div class="f03-modal-box">
+        <div class="f03-modal-header">
+            <div>
+                <div class="f03-modal-title">❌ UPP Belum Memenuhi Standar</div>
+                <div class="f03-modal-subtitle">Daftar UPP yang belum memenuhi target responden</div>
+            </div>
+            <button class="f03-modal-close" onclick="closeModal('notmet')" aria-label="Tutup">&times;</button>
+        </div>
+        <div class="f03-modal-summary">
+            <div class="f03-modal-stat">
+                <span class="f03-modal-stat-label">Jumlah UPP</span>
+                <span class="f03-modal-stat-value" style="color:#EF4444;">{{ count($targetNotMetUpps ?? []) }}</span>
+            </div>
+            <div class="f03-modal-stat">
+                <span class="f03-modal-stat-label">Rata-rata Total Skor</span>
+                <span class="f03-modal-stat-value" style="color:#667eea;">{{ number_format($avgScoreNotMet ?? 0, 2) }}<span style="font-size:13px;font-weight:400;color:#9CA3AF;">/5.00</span></span>
+            </div>
+        </div>
+        <div class="f03-modal-body">
+            @if(count($targetNotMetUpps ?? []) > 0)
+            <div class="f03-modal-list">
+                @foreach($targetNotMetUpps as $i => $item)
+                <div class="f03-modal-item">
+                    <div class="f03-modal-item-rank" style="color:#EF4444;">#{{ $i + 1 }}</div>
+                    <div class="f03-modal-item-info">
+                        <div class="f03-modal-item-name">{{ $item['upp_nama'] }}</div>
+                        <div class="f03-modal-item-meta">
+                            {{ $item['total_responses'] }} respons
+                            @if(($item['target_responden'] ?? 0) > 0)
+                                &middot; Target: {{ $item['target_responden'] }}
+                                &middot; <span style="color:#EF4444;font-weight:600;">✗ Kurang {{ $item['target_responden'] - $item['total_responses'] }}</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="f03-modal-item-score score-notmet">{{ number_format($item['average_score'], 2) }}<span style="font-size:11px;font-weight:400;color:#9CA3AF;">/5.00</span></div>
+                </div>
+                @endforeach
+            </div>
+            @else
+            <div class="f03-empty-state">Semua UPP telah memenuhi standar. 🎉</div>
+            @endif
+        </div>
+    </div>
+</div>
+
 <script>
     function filterRankings() {
         const periodeId = document.getElementById('periodeFilter').value;
@@ -296,6 +513,35 @@
         
         window.location.href = url.toString();
     }
+
+    function openModal(type) {
+        const overlay = document.getElementById('modal-' + type);
+        if (overlay) {
+            overlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    function closeModal(type) {
+        const overlay = document.getElementById('modal-' + type);
+        if (overlay) {
+            overlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+    }
+
+    function closeModalOnBg(event, type) {
+        if (event.target === document.getElementById('modal-' + type)) {
+            closeModal(type);
+        }
+    }
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeModal('met');
+            closeModal('notmet');
+        }
+    });
 </script>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>

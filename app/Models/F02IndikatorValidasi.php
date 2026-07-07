@@ -9,7 +9,15 @@ class F02IndikatorValidasi extends Model
     protected $table = 'f02_indikator_validasi';
 
     protected $fillable = [
-        'f02_validasi_id', 'indikator_id', 'nilai', 'catatan', 'status'
+        'f02_validasi_id',        'indikator_id',
+        'nilai',
+        'catatan',
+        'status',
+        'is_carried_over'
+    ];
+
+    protected $casts = [
+        'is_carried_over' => 'boolean'
     ];
 
     public $timestamps = true;

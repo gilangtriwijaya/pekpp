@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreAspekRequest extends FormRequest
 {
@@ -13,9 +14,14 @@ class StoreAspekRequest extends FormRequest
 
     public function rules()
     {
+        $periodeId = $this->input('periode_id');
+
         return [
             'periode_id' => 'required|exists:periode,id',
-            'kode' => 'nullable|string|max:50',
+            'kode' => [
+                'nullable', 'string', 'max:50',
+                Rule::unique('aspek', 'kode')->where('periode_id', $periodeId),
+            ],
             'nama' => 'required|string|max:255',
             'domain' => 'required|in:internal,publik',
             'bobot' => 'required|numeric|min:0|max:100',
@@ -28,6 +34,7 @@ class StoreAspekRequest extends FormRequest
         return [
             'periode_id.required' => 'Periode harus dipilih.',
             'periode_id.exists' => 'Periode yang dipilih tidak valid.',
+            'kode.unique' => 'Kode Aspek sudah digunakan di periode ini, gunakan kode yang berbeda.',
             'nama.required' => 'Nama aspek harus diisi.',
             'domain.required' => 'Domain harus dipilih.',
             'domain.in' => 'Domain harus salah satu dari: internal atau publik.',

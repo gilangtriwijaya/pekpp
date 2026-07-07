@@ -489,13 +489,23 @@ class F01PengisianController extends Controller
             ];
         });
 
+        $isResubmit = $pengisian->version_number > 1;
+        $isChangedMap = [];
+        if ($isResubmit) {
+            $isChangedMap = \App\Models\F01IndikatorNilai::where('f01_pengisian_id', $pengisian->id)
+                ->pluck('is_changed', 'indikator_id')
+                ->toArray();
+        }
+
         return view('f01.show-new', [
             'pengisian' => $pengisian,
             'selectedAspek' => $selectedAspek,
             'selectedAspekId' => $selectedAspekId,
             'aspeks' => $aspeksWithProgress,
             'f02IndicatorMap' => $f02IndicatorMap,
-            'isReadOnly' => $pengisian->status !== 'draft'
+            'isReadOnly' => $pengisian->status !== 'draft',
+            'isResubmit' => $isResubmit,
+            'isChangedMap' => $isChangedMap
         ]);
     }
 
@@ -918,6 +928,38 @@ class F01PengisianController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Gagal menghapus bukti dukung: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * API endpoint: Mark indikator as changed by UPP
+     */
+    public function markIndikatorChanged(Request $request, $pengisianId, $indikatorId)
+    {
+        $user = $request->user();
+        $pengisian = F01Pengisian::findOrFail($pengisianId);
+        
+        $this->authorize('update', $pengisian);
+
+        try {
+            $indikatorNilai = \App\Models\F01IndikatorNilai::firstOrCreate([
+                'f01_pengisian_id' => $pengisianId,
+                'indikator_id' => $indikatorId,
+            ]);
+
+            $indikatorNilai->update([
+                'is_changed' => true
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Indikator ditandai sebagai berubah'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengubah status indikator: ' . $e->getMessage()
             ], 500);
         }
     }

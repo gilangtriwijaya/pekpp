@@ -47,7 +47,7 @@
 
 <div class="f03-error-container">
     <div class="f03-error-card">
-        <div class="f03-error-icon">⚠️</div>
+        <div class="f03-error-icon">{{ $icon ?? '⚠️' }}</div>
         <h1 class="f03-error-title">{{ $title ?? 'Akses Ditolak' }}</h1>
         <p class="f03-error-message">{{ $message ?? 'Token tidak valid atau telah kadaluarsa. Silakan hubungi penyelenggara untuk mendapatkan tautan kuesioner yang benar.' }}</p>
         @if($action_url ?? null)

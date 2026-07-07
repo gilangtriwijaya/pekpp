@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chart.js Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chart-container {
+            position: relative;
+            width: 300px;
+            height: 300px;
+            margin: 20px auto;
+            border: 2px solid #e5e7eb;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .log {
+            background: #f0f0f0;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Chart.js Initialization Test</h1>
+
+        <div class="log" id="log"></div>
+
+        <div class="chart-container">
+            <canvas id="testChart"></canvas>
+        </div>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const log = document.getElementById('log');
+        const result = document.getElementById('result');
+
+        function addLog(message, type = 'info') {
+            const color = type === 'success' ? 'green' : (type === 'error' ? 'red' : 'black');
+            const html = `<div style="color: ${color};">[${new Date().toLocaleTimeString()}] ${message}</div>`;
+            log.innerHTML += html;
+            log.scrollTop = log.scrollHeight;
+            console.log(`[${type}]`, message);
+        }
+
+        // Test Chart.js availability
+        addLog('Chart.js version: ' + (typeof Chart !== 'undefined' ? Chart.version : 'NOT LOADED'), 'info');
+
+        if (typeof Chart === 'undefined') {
+            addLog('ERROR: Chart.js not loaded!', 'error');
+            result.innerHTML = '<p style="color: red;">Chart.js library not available</p>';
+        } else {
+            addLog('Chart.js library available ✓', 'success');
+
+            // Test data
+            const chartData = {
+                labels: ['Istimewa (5)', 'Baik (4)', 'Baik Dengan Catatan (3)', 'Cukup (2)', 'Cukup Dengan Catatan (1)', 'Prioritas Pembinaan (0)'],
+                data: [9, 15, 8, 9, 10, 7],
+                backgroundColor: ['#185FA5', '#10B981', '#EAB308', '#D97706', '#C43E3E', '#A32D2D']
+            };
+
+            addLog('Test data prepared: ' + JSON.stringify(chartData), 'info');
+
+            try {
+                const canvas = document.getElementById('testChart');
+                if (!canvas) {
+                    addLog('ERROR: Canvas element not found', 'error');
+                } else {
+                    addLog('Canvas element found', 'success');
+
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) {
+                        addLog('ERROR: Could not get canvas context', 'error');
+                    } else {
+                        addLog('Canvas context obtained', 'success');
+
+                        addLog('Creating chart instance...', 'info');
+
+                        const chart = new Chart(ctx, {
+                            type: 'doughnut',
+                            data: {
+                                labels: chartData.labels,
+                                datasets: [{
+                                    data: chartData.data,
+                                    backgroundColor: chartData.backgroundColor,
+                                    borderColor: '#ffffff',
+                                    borderWidth: 2
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                    legend: {
+                                        position: 'bottom',
+                                        labels: {
+                                            font: { size: 11 },
+                                            padding: 12,
+                                            usePointStyle: true,
+                                            boxWidth: 8
+                                        }
+                                    }
+                                }
+                            }
+                        });
+
+                        addLog('Chart created successfully ✓', 'success');
+                        result.innerHTML = '<p style="color: green;"><strong>✓ Chart initialized and rendering</strong></p>';
+                    }
+                }
+            } catch (error) {
+                addLog('ERROR: ' + error.message, 'error');
+                result.innerHTML = '<p style="color: red;"><strong>✗ Error: ' + error.message + '</strong></p>';
+            }
+        }
+    </script>
+</body>
+</html>

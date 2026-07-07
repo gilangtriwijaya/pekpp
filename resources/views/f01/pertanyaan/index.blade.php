@@ -36,6 +36,30 @@
         'tableId' => 'pertanyaanTable'
     ])
     
+    <div style="margin-bottom: 1rem; display: flex; gap: 1rem; align-items: center; justify-content: flex-end; background: white; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+        <form method="GET" action="{{ route('admin.f01.pertanyaan.index') }}" style="display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap;">
+            <label for="filter_periode" style="font-size: 14px; font-weight: 500; color: #475569;">Filter Periode:</label>
+            <select name="periode_id" id="filter_periode" style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; min-width: 150px; outline: none; transition: border-color 0.2s;" onchange="document.getElementById('filter_indikator').value=''; this.form.submit()" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#cbd5e1'">
+                <option value="">Semua Periode</option>
+                @foreach($periodes as $p)
+                    <option value="{{ $p->id }}" {{ $selectedPeriodeId == $p->id ? 'selected' : '' }}>
+                        {{ $p->nama }} ({{ $p->tahun }}) {{ $p->is_aktif ? '✓' : '' }}
+                    </option>
+                @endforeach
+            </select>
+            
+            <label for="filter_indikator" style="font-size: 14px; font-weight: 500; color: #475569; margin-left: 1rem;">Indikator:</label>
+            <select name="indikator_id" id="filter_indikator" style="padding: 0.5rem; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 14px; min-width: 200px; outline: none; transition: border-color 0.2s;" onchange="this.form.submit()" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor='#cbd5e1'">
+                <option value="">Semua Indikator</option>
+                @foreach($indikators as $i)
+                    <option value="{{ $i->id }}" {{ request('indikator_id') == $i->id ? 'selected' : '' }}>
+                        [{{ $i->kode }}] {{ Str::limit($i->nama, 40) }}
+                    </option>
+                @endforeach
+            </select>
+        </form>
+    </div>
+
     <table class="pertanyaan-table" id="pertanyaanTable">
         <thead>
             <tr>

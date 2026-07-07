@@ -7,6 +7,9 @@
 
     <title>@yield('title', 'PEKPPP')</title>
 
+    {{-- x-cloak: hide Alpine elements until Alpine initializes --}}
+    <style>[x-cloak] { display: none !important; }</style>
+
     @vite(['resources/js/app.js'])
 
         {{-- NOTE: legacy static assets in `public/css` and `public/js` were previously loaded here.
@@ -21,6 +24,9 @@
 
     {{-- Chart.js Library --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+    {{-- Alpine.js v3 via CDN (defer ensures DOM is ready before init) --}}
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
 
     {{-- Stack for page-specific styles --}}
     @stack('styles')
@@ -62,6 +68,7 @@
 
 {{-- Livewire Scripts --}}
 @livewireScripts
+
 
 @stack('scripts')
 </body>

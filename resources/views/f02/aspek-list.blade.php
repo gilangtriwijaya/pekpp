@@ -345,6 +345,11 @@
                             <span>📌 Indikator: {{ $aspekData['total_indikators'] }}</span>
                             <span>✓ Progress: {{ $aspekData['filled_indikators'] }}/{{ $aspekData['total_indikators'] }} divalidasi</span>
                             <span>💯 Skor Mentah: {{ (int)$aspekData['skor_mentah'] }}</span>
+                            @if(isset($aspekData['changed_count']) && $aspekData['changed_count'] > 0)
+                                <span style="color: #B45309; background: #FEF3C7; padding: 2px 8px; border-radius: 4px; font-weight: 600;">
+                                    ⚠️ {{ $aspekData['changed_count'] }} indikator berubah
+                                </span>
+                            @endif
                         </div>
                     </div>
                     <div class="f02-aspek-progress">

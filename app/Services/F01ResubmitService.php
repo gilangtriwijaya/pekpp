@@ -172,12 +172,6 @@ class F01ResubmitService
         return F02Validasi::where('f01_pengisian_id', $f01Previous->id)->first();
     }
 
-    /**
-     * When UPP submit F01 vN, auto-create new F02Validasi
-     *
-     * @param F01Pengisian $f01
-     * @return F02Validasi new F02 ready for validation
-     */
     public function autoCreateF02(F01Pengisian $f01)
     {
         // Check if F02 already exist (should not, but be safe)
@@ -186,13 +180,47 @@ class F01ResubmitService
             return $existing;
         }
 
-        return F02Validasi::create([
-            'f01_pengisian_id' => $f01->id,
-            'periode_id' => $f01->periode_id,
-            'status' => 'draft', // Ready untuk admin untuk validasi
-            'catatan_umum' => null,
-            'total_nilai' => null,
-            'nilai_mentah' => null,
-        ]);
+        return DB::transaction(function () use ($f01) {
+            $f02 = F02Validasi::create([
+                'f01_pengisian_id' => $f01->id,
+                'periode_id' => $f01->periode_id,
+                'status' => 'draft', // Ready untuk admin untuk validasi
+                'catatan_umum' => null,
+                'total_nilai' => null,
+                'nilai_mentah' => null,
+            ]);
+
+            // Carry-over logic
+            $previousF02 = $this->getPreviousF02Data($f01);
+            
+            if ($previousF02) {
+                // Get all indikators that are NOT changed
+                $unchangedIndikators = \App\Models\F01IndikatorNilai::where('f01_pengisian_id', $f01->id)
+                    ->where('is_changed', false)
+                    ->pluck('indikator_id');
+
+                if ($unchangedIndikators->isNotEmpty()) {
+                    // Get previous validasi scores for these indikators
+                    $previousScores = \App\Models\F02IndikatorValidasi::where('f02_validasi_id', $previousF02->id)
+                        ->whereIn('indikator_id', $unchangedIndikators)
+                        ->get();
+
+                    foreach ($previousScores as $prevScore) {
+                        // Insert to new F02, avoiding duplicates just in case
+                        \App\Models\F02IndikatorValidasi::firstOrCreate([
+                            'f02_validasi_id' => $f02->id,
+                            'indikator_id' => $prevScore->indikator_id,
+                        ], [
+                            'nilai' => $prevScore->nilai,
+                            'catatan' => $prevScore->catatan,
+                            'status' => $prevScore->status,
+                            'is_carried_over' => true,
+                        ]);
+                    }
+                }
+            }
+
+            return $f02;
+        });
     }
 }

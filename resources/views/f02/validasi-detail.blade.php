@@ -165,70 +165,64 @@
             font-size: 0.95rem;
         }
 
-        .f02-question-answer {
-            color: #374151;
-            padding: 12px 16px;
-            background: white;
+        .f02-form-input,
+        .f02-form-select,
+        .f02-form-textarea {
+            width: 100%;
+            padding: 10px 12px;
             border: 1px solid #D1D5DB;
             border-radius: 6px;
             font-size: 0.95rem;
-            line-height: 1.5;
+            font-family: inherit;
+            transition: all 0.2s;
         }
 
-        .f02-question-answer-empty {
-            color: #9CA3AF;
-            font-style: italic;
+        .f02-form-input:disabled,
+        .f02-form-select:disabled,
+        .f02-form-textarea:disabled {
+            background: #FFFFFF;
+            color: #1F2937;
+            cursor: default;
+            -webkit-text-fill-color: #1F2937;
+            opacity: 1;
         }
 
-        .f02-answer-checkbox-list {
+        .f02-form-textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .f02-radio-group, .f02-checkbox-group {
             display: flex;
-            flex-direction: column;
-            gap: 8px;
+            gap: 20px;
+            flex-wrap: wrap;
         }
 
-        .f02-answer-item {
+        .f02-checkbox-group {
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .f02-option {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 10px 12px;
-            background: white;
-            border: 1px solid #D1D5DB;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            color: #374151;
+            cursor: default;
         }
 
-        .f02-answer-item input[type="checkbox"] {
-            cursor: not-allowed;
-            width: 18px;
-            height: 18px;
+        .f02-option input {
+            cursor: default;
             accent-color: #3B82F6;
-            flex-shrink: 0;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            border: 2px solid #D1D5DB;
-            border-radius: 4px;
-            background: white;
-            transition: all 0.2s ease;
+        }
+
+        .f02-option label {
+            cursor: default;
+            user-select: none;
         }
         
-        .f02-answer-item input[type="checkbox"]:checked {
-            background-color: #3B82F6;
-            border-color: #3B82F6;
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path fill="white" d="M3.5 8l2 2 4-5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>');
-            background-repeat: no-repeat;
-            background-position: center;
-            background-size: 12px;
-        }
-        
-        .f02-answer-item input[type="checkbox"]:disabled {
-            opacity: 1;
-        }
-        
-        .f02-answer-item input[type="checkbox"]:disabled:checked {
-            background-color: #3B82F6;
-            border-color: #3B82F6;
+        .f02-lainnya-input {
+            width: 100%;
+            max-width: 500px;
         }
 
         .f02-descriptions-card {
@@ -284,32 +278,12 @@
             color: #EF4444;
         }
 
-        .f02-form-select,
-        .f02-form-textarea {
-            width: 100%;
-            padding: 10px 12px;
-            border: 1px solid #D1D5DB;
-            border-radius: 6px;
-            font-size: 0.95rem;
-            font-family: inherit;
-            transition: all 0.2s;
-        }
-
+        .f02-form-input:focus,
         .f02-form-select:focus,
         .f02-form-textarea:focus {
             outline: none;
             border-color: #4F46E5;
             box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
-        }
-
-        .f02-form-select:disabled {
-            background: #F3F4F6;
-            cursor: not-allowed;
-        }
-
-        .f02-form-textarea {
-            resize: vertical;
-            min-height: 100px;
         }
 
         .f02-skor-option-label {
@@ -509,15 +483,58 @@
     {{-- Indikator Tabs --}}
     <div class="f02-nav-tabs" id="indikatorTabs">
         @foreach($indikators as $ind)
+            @php
+                $status = isset($indikatorStatuses) && isset($indikatorStatuses[$ind->id]) ? $indikatorStatuses[$ind->id] : null;
+                $tabBadge = '';
+                if ($status && isset($isResubmit) && $isResubmit) {
+                    if ($status['is_changed']) {
+                        $tabBadge = ' <span style="display:inline-block; width:8px; height:8px; background-color:#F59E0B; border-radius:50%; margin-left:4px;" title="Berubah"></span>';
+                    } elseif ($status['is_carried_over']) {
+                        $tabBadge = ' <span style="display:inline-block; width:8px; height:8px; background-color:#3B82F6; border-radius:50%; margin-left:4px;" title="Carry-over"></span>';
+                    } else {
+                        $tabBadge = ' <span style="display:inline-block; width:8px; height:8px; background-color:#9CA3AF; border-radius:50%; margin-left:4px;" title="Tidak ada skor sebelumnya"></span>';
+                    }
+                }
+            @endphp
             <button type="button" 
                     class="f02-nav-tab {{ $ind->id === $indikator->id ? 'active' : '' }}"
                     data-indikator-id="{{ $ind->id }}"
                     data-aspek-id="{{ $aspek->id }}"
                     onclick="switchIndikator({{ $ind->id }}, {{ $aspek->id }}, {{ $validasi->id }})">
-                {{ $ind->urutan }}. {{ substr($ind->nama, 0, 30) }}{{ strlen($ind->nama) > 30 ? '...' : '' }}
+                {{ $ind->urutan }}. {{ substr($ind->nama, 0, 30) }}{{ strlen($ind->nama) > 30 ? '...' : '' }}{!! $tabBadge !!}
             </button>
         @endforeach
     </div>
+
+    {{-- Banner Status --}}
+    @if(isset($isResubmit) && $isResubmit && isset($indikatorStatuses) && isset($indikatorStatuses[$indikator->id]))
+        @php $currStatus = $indikatorStatuses[$indikator->id]; @endphp
+        @if($currStatus['is_changed'])
+            <div style="background: #FFFBEB; border: 1px solid #FCD34D; color: #B45309; padding: 16px; border-radius: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">⚠️</span>
+                <div>
+                    <strong style="display: block; margin-bottom: 4px;">Perhatian: Indikator Diubah</strong>
+                    UPP mengubah jawaban/bukti dukung pada indikator ini. Perlu validasi ulang.
+                </div>
+            </div>
+        @elseif($currStatus['is_carried_over'])
+            <div style="background: #EFF6FF; border: 1px solid #BFDBFE; color: #1D4ED8; padding: 16px; border-radius: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">ℹ️</span>
+                <div>
+                    <strong style="display: block; margin-bottom: 4px;">Informasi: Carry-over</strong>
+                    Jawaban tidak berubah. Skor disalin otomatis dari periode validasi sebelumnya.
+                </div>
+            </div>
+        @else
+            <div style="background: #F3F4F6; border: 1px solid #D1D5DB; color: #4B5563; padding: 16px; border-radius: 8px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px;">
+                <span style="font-size: 1.5rem;">ℹ️</span>
+                <div>
+                    <strong style="display: block; margin-bottom: 4px;">Informasi</strong>
+                    Indikator ini tidak dilaporkan berubah, namun tidak ditemukan skor dari validasi sebelumnya. Silakan isi skor secara manual.
+                </div>
+            </div>
+        @endif
+    @endif
 
     {{-- Content Area --}}
     <div class="f02-content-wrapper">
@@ -536,43 +553,117 @@
                         <div class="f02-question">
                             <div class="f02-question-label">{{ $loop->index + 1 }}. {{ $p->label }}</div>
                             
+                            {{-- Get saved answer--}}
                             @php
-                                $jawaban = $p->jawaban->first();  // Get the jawaban (already filtered by pengisian_id in controller)
-                                $jawabanText = $jawaban?->nilai ?? null;
-                                $tipeInput = $p->tipe();
-                                
-                                // For checkbox, ensure we have an array
-                                if ($tipeInput === 'checkbox') {
-                                    if (is_string($jawabanText)) {
-                                        $jawabanText = json_decode($jawabanText, true) ?? [];
-                                    } elseif (!is_array($jawabanText)) {
-                                        $jawabanText = [];
-                                    }
-                                }
+                            $jawaban = $p->jawaban->first();
+                            $savedAnswer = $jawaban ? $jawaban->nilai : '';
                             @endphp
 
-                            @if($tipeInput === 'radio' || $tipeInput === 'select')
-                                <div class="f02-question-answer" style="color: {{ $jawabanText ? '#374151' : '#9CA3AF' }}">
-                                    {{ $jawabanText ?? 'Belum dijawab' }}
-                                </div>
-                            @elseif($tipeInput === 'checkbox')
-                                <div class="f02-answer-checkbox-list">
-                                    @if(is_array($jawabanText) && count($jawabanText) > 0)
-                                        @foreach($jawabanText as $option)
-                                            <div class="f02-answer-item">
-                                                <input type="checkbox" disabled checked>
-                                                <span>{{ is_array($option) ? ($option['label'] ?? $option['value'] ?? $option) : $option }}</span>
-                                            </div>
+                            {{-- Render Question Input --}}
+                            @switch($p->tipe())
+                                @case('text')
+                                    <input type="text" 
+                                           class="f02-form-input"
+                                           value="{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}"
+                                           disabled
+                                           placeholder="Belum dijawab">
+                                    @break
+
+                                @case('textarea')
+                                    <textarea class="f02-form-textarea"
+                                              disabled
+                                              placeholder="Belum dijawab">{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}</textarea>
+                                    @break
+
+                                @case('yesno')
+                                    <div class="f02-radio-group">
+                                        <label class="f02-option">
+                                            <input type="radio" 
+                                                   value="Ya"
+                                                   {{ $savedAnswer === 'Ya' || $savedAnswer === '"Ya"' ? 'checked' : '' }}
+                                                   disabled>
+                                            <span>Ya</span>
+                                        </label>
+                                        <label class="f02-option">
+                                            <input type="radio" 
+                                                   value="Tidak"
+                                                   {{ $savedAnswer === 'Tidak' || $savedAnswer === '"Tidak"' ? 'checked' : '' }}
+                                                   disabled>
+                                            <span>Tidak</span>
+                                        </label>
+                                    </div>
+                                    @break
+
+                                @case('select')
+                                    <select class="f02-form-select" disabled>
+                                        <option value="">-- Belum dijawab --</option>
+                                        @php
+                                        $optionsRaw = $p->opsi_jawaban ?? [];
+                                        $options = is_array($optionsRaw) ? $optionsRaw : json_decode($optionsRaw, true) ?? [];
+                                        @endphp
+                                        @foreach($options as $option)
+                                            <option value="{{ $option['value'] ?? $option }}"
+                                                    {{ $savedAnswer === ($option['value'] ?? $option) || $savedAnswer === json_encode($option['value'] ?? $option) ? 'selected' : '' }}>
+                                                {{ $option['label'] ?? $option }}
+                                            </option>
                                         @endforeach
-                                    @else
-                                        <div style="color: #9CA3AF; font-style: italic;">Belum dijawab</div>
-                                    @endif
-                                </div>
-                            @else
-                                <div class="f02-question-answer" style="color: {{ $jawabanText ? '#374151' : '#9CA3AF' }}">
-                                    {{ $jawabanText ?? 'Belum dijawab' }}
-                                </div>
-                            @endif
+                                    </select>
+                                    @break
+
+                                @case('number')
+                                    <input type="number" 
+                                           class="f02-form-input"
+                                           value="{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}"
+                                           disabled
+                                           placeholder="Belum dijawab">
+                                    @break
+
+                                @case('checkbox')
+                                    <div class="f02-checkbox-group">
+                                        @php
+                                        $optionsRaw = $p->opsi_jawaban ?? [];
+                                        $options = is_array($optionsRaw) ? $optionsRaw : json_decode($optionsRaw, true) ?? [];
+                                        $savedValues = is_array($savedAnswer) ? $savedAnswer : (json_decode($savedAnswer, true) ?? []);
+                                        $hasLainnya = isset($savedValues['lainnya']) && !empty($savedValues['lainnya']);
+                                        $lainnyaValue = $savedValues['lainnya'] ?? '';
+                                        @endphp
+                                        @foreach($options as $option)
+                                            <label class="f02-option">
+                                                <input type="checkbox" 
+                                                       value="{{ $option['value'] ?? $option }}"
+                                                       {{ in_array($option['value'] ?? $option, $savedValues) ? 'checked' : '' }}
+                                                       disabled>
+                                                <span>{{ $option['label'] ?? $option }}</span>
+                                            </label>
+                                        @endforeach
+                                        
+                                        @if($p->allow_lainnya)
+                                        <label class="f02-option">
+                                            <input type="checkbox" 
+                                                   value="__lainnya__"
+                                                   {{ $hasLainnya ? 'checked' : '' }}
+                                                   disabled>
+                                            <span>Lainnya</span>
+                                        </label>
+                                        
+                                        <div style="margin-left: 28px; margin-top: 8px; display: {{ $hasLainnya ? 'block' : 'none' }};">
+                                            <input type="text" 
+                                                   class="f02-form-input f02-lainnya-input"
+                                                   value="{{ $lainnyaValue }}"
+                                                   disabled>
+                                        </div>
+                                        @endif
+                                    </div>
+                                    @break
+
+                                @default
+                                    <input type="text" 
+                                           class="f02-form-input"
+                                           value="{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}"
+                                           disabled
+                                           placeholder="Belum dijawab">
+                                    @break
+                            @endswitch
                         </div>
                     @endforeach
                 @endif

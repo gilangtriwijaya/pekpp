@@ -26,7 +26,21 @@ class F01IndikatorController extends Controller
 
     public function index(Request $request)
     {
+        $periodes = \App\Models\Periode::orderBy('tahun', 'desc')->orderBy('nama', 'asc')->get();
+        
+        // Default ke periode aktif jika tidak ada filter dari request
+        $periodeAktif = \App\Models\Periode::where('is_aktif', 1)->first();
+        $selectedPeriodeId = $request->filled('periode_id')
+            ? $request->input('periode_id')
+            : ($periodeAktif ? $periodeAktif->id : null);
+
         $query = Indikator::with('aspek');
+        
+        if ($selectedPeriodeId) {
+            $query->whereHas('aspek', function($q) use ($selectedPeriodeId) {
+                $q->where('periode_id', $selectedPeriodeId);
+            });
+        }
         
         if ($request->filled('aspek_id')) {
             $query->where('aspek_id', $request->input('aspek_id'));
@@ -47,10 +61,16 @@ class F01IndikatorController extends Controller
             $query->orderBy('aspek_id', 'asc')->orderBy('kode', 'asc');
         }
 
-        $indikator = $query->paginate(50);
-        $aspeks = Aspek::orderBy('urutan', 'asc')->get();
+        $indikator = $query->paginate(50)->withQueryString();
         
-        return view('f01.indikator.index', compact('indikator', 'aspeks'));
+        // Load aspects for the create/edit modal dropdown, scoped by selected period
+        $aspeksQuery = Aspek::orderBy('urutan', 'asc');
+        if ($selectedPeriodeId) {
+            $aspeksQuery->where('periode_id', $selectedPeriodeId);
+        }
+        $aspeks = $aspeksQuery->get();
+        
+        return view('f01.indikator.index', compact('indikator', 'aspeks', 'periodes', 'selectedPeriodeId'));
     }
 
     public function store(StoreIndikatorRequest $request)

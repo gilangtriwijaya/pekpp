@@ -4,7 +4,7 @@
 
 <meta name="csrf-token" content="{{ csrf_token() }}">
 
-<link rel="stylesheet" href="{{ asset('css/admin_user_upp.css') }}">
+<link rel="stylesheet" href="{{ asset('css/admin_user_upp.css') }}?v={{ time() }}">
 
 @include('components.crud-table.css', ['prefix' => 'user_upp'])
 

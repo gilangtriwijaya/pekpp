@@ -9,6 +9,8 @@ use App\Models\F03Pengisian;
 use App\Models\Periode;
 use App\Models\Upp;
 use App\Models\Aspek;
+use App\Models\UserUpp;
+use App\Models\Pengumuman;
 use Illuminate\Http\Request;
 
 class DashboardController extends Controller
@@ -16,73 +18,518 @@ class DashboardController extends Controller
     /**
      * Display main dashboard with F01/F02/F03 data
      */
-    public function index(Request $request)
+    public function index()
     {
-        $user = $request->user();
-        $isGlobalUser = $user->hasGlobalRole(['superadmin', 'admin_organisasi', 'admin_bagian_organisasi', 'org_admin', 'org-admin']);
+        $user = auth()->user();
+        $isAdminUPP = !$user->hasGlobalRole([
+            'superadmin', 'admin_organisasi', 'admin_bagian_organisasi', 'org_admin', 'org-admin'
+        ]);
 
-        // Get active periode
-        $periode = Periode::where('is_aktif', 1)->first();
-        if (!$periode) {
-            return view('dashboard.index')->with('error', 'Tidak ada periode aktif');
+        $data = [
+            'user'         => $user,
+            'isAdminUPP'   => $isAdminUPP,
+            'pengumuman'   => $this->getPengumumanAktif(),
+            'periodeAktif' => $this->getPeriodeAktif(),
+        ];
+
+        if ($isAdminUPP) {
+            $data += $this->getDataUPP($user);
+        } else {
+            $data += $this->getDataInternal();
         }
 
-        // Get available UPPs for filtering
-        $availableUpps = $this->getAvailableUppsForUser($user);
+        return view('dashboard.index', $data);
+    }
 
-        // Get available UPPs with IPP scores (sorted for filter modal)
-        $availableUppsWithScores = $this->getAvailableUppsWithScores($periode->id, $availableUpps);
+    /**
+     * Get active announcement
+     */
+    private function getPengumumanAktif()
+    {
+        try {
+            return Pengumuman::aktif()->latest()->first();
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
 
-        // Get selected UPPs from request
-        // If not provided, try to load from user's saved preference
-        // Otherwise default to first UPP
-        $selectedUppIds = $request->get('upp_ids', []);
-        if (empty($selectedUppIds)) {
-            // Try to load saved preference
-            if ($user->preferred_upp_ids && is_array($user->preferred_upp_ids) && count($user->preferred_upp_ids) > 0) {
-                $selectedUppIds = $user->preferred_upp_ids;
+    /**
+     * Get active period
+     */
+    private function getPeriodeAktif()
+    {
+        return Periode::where('is_aktif', 1)->first();
+    }
 
-                // Filter out UPPs user no longer has access to
-                if (!$isGlobalUser) {
-                    $userUppIds = $user->getUserUpps()->pluck('upp_id')->toArray();
-                    $selectedUppIds = array_intersect($selectedUppIds, $userUppIds);
+    /**
+     * Get predicate and presentation color mapping based on index score
+     */
+    public static function getPredikatData($skor)
+    {
+        $skor = (float) $skor;
+        if ($skor > 4.50) {
+            return [
+                'label' => 'Pelayanan Prima',
+                'color' => '#7F77DD',
+                'bg' => '#f5f3ff',
+            ];
+        } elseif ($skor >= 4.01) {
+            return [
+                'label' => 'Sangat Baik',
+                'color' => '#185FA5',
+                'bg' => '#eef2ff',
+            ];
+        } elseif ($skor >= 3.51) {
+            return [
+                'label' => 'Baik',
+                'color' => '#0F6E56',
+                'bg' => '#ecfdf5',
+            ];
+        } elseif ($skor >= 3.01) {
+            return [
+                'label' => 'Baik Dengan Catatan',
+                'color' => '#0F6E56',
+                'bg' => '#ecfdf5',
+            ];
+        } elseif ($skor >= 2.51) {
+            return [
+                'label' => 'Cukup',
+                'color' => '#BA7517',
+                'bg' => '#fff7e8',
+            ];
+        } elseif ($skor >= 2.01) {
+            return [
+                'label' => 'Kurang',
+                'color' => '#BA7517',
+                'bg' => '#fff7e8',
+            ];
+        } else {
+            return [
+                'label' => 'Prioritas Pembinaan',
+                'color' => '#A32D2D',
+                'bg' => '#fef2f2',
+            ];
+        }
+    }
+
+    /**
+     * Get data variables for Admin UPP dashboard
+     */
+    private function getDataUPP($user)
+    {
+        $userUpp = UserUpp::where('user_id', $user->id)->where('aktif', 1)->first();
+        $upp = $userUpp ? $userUpp->upp : null;
+        $uppName = $upp ? $upp->nama : 'Belum Terdaftar';
+        $uppTerdaftar = $userUpp !== null;
+
+        $periodeAktif = $this->getPeriodeAktif();
+        $progressPerAspek = collect();
+        $statusPengisian = 'belum_mulai';
+        $urlPengisian = '#';
+        $hasilPenilaian = null;
+        $radarData = [];
+        $periodeList = [];
+        $periodeSebelumnya = null;
+        $deltaNilai = null;
+
+        if ($periodeAktif) {
+            $f01 = null;
+            if ($upp) {
+                $f01 = F01Pengisian::where('periode_id', $periodeAktif->id)
+                    ->where('upp_id', $upp->id)
+                    ->where('is_latest_version', true)
+                    ->first();
+            }
+
+            if ($f01) {
+                if (in_array($f01->status, ['draft', 'rolled_back'])) {
+                    $statusPengisian = 'sedang_mengisi';
+                } elseif ($f01->status === 'submitted') {
+                    $statusPengisian = 'menunggu_validasi';
+                } elseif ($f01->status === 'selesai') {
+                    $statusPengisian = 'selesai';
                 }
-
-                // If after filtering we'd have no UPPs, default to first available
-                if (empty($selectedUppIds)) {
-                    $selectedUppIds = [$availableUpps->first()?->id];
-                }
+                $urlPengisian = route('f01.aspek-list', $f01->id);
             } else {
-                // No saved preference, default to first available UPP
-                $selectedUppIds = [$availableUpps->first()?->id];
+                $statusPengisian = 'belum_mulai';
+                $urlPengisian = route('f01.index');
+            }
+
+            // Calculate progress per aspek for active period
+            $aspeks = Aspek::where('periode_id', $periodeAktif->id)
+                ->where('aktif', 1)
+                ->orderBy('urutan')
+                ->with(['indikator' => function($q) {
+                    $q->where('aktif', 1)->orderBy('urutan')->with('pertanyaan');
+                }])
+                ->get();
+
+            $jawaban = $f01 ? $f01->jawaban : collect();
+
+            $progressPerAspek = $aspeks->map(function ($aspek) use ($jawaban) {
+                $total = 0;
+                $terisi = 0;
+                foreach ($aspek->indikator as $ind) {
+                    $total++;
+                    $questions = $ind->pertanyaan;
+                    if ($questions->isEmpty()) {
+                        $terisi++;
+                        continue;
+                    }
+                    $answered = 0;
+                    foreach ($questions as $q) {
+                        $jaw = $jawaban->firstWhere('pertanyaan_id', $q->id);
+                        if ($jaw && $jaw->nilai !== null && $jaw->nilai !== '') {
+                            $answered++;
+                        }
+                    }
+                    if ($answered > 0) {
+                        $terisi++;
+                    }
+                }
+                return (object) [
+                    'nama' => $aspek->nama,
+                    'terisi' => $terisi,
+                    'total' => $total,
+                ];
+            });
+
+            // Calculate active period assessment result
+            if ($upp) {
+                $f02 = F02Validasi::where('periode_id', $periodeAktif->id)
+                    ->where('status', 'selesai')
+                    ->whereHas('f01', function($q) use ($upp) {
+                        $q->where('upp_id', $upp->id)
+                            ->where('is_latest_version', true);
+                    })
+                    ->first();
+                $f02Value = $f02 ? $f02->total_nilai : null;
+
+                $targetResponden = (int) ($periodeAktif->target_responden_f03 ?? 0);
+                $f03Stats = $this->getEffectiveF03StatsForUpp($periodeAktif->id, $upp->id, $targetResponden);
+                $f03Value = $f03Stats['response_count'] > 0 ? $f03Stats['effective_average'] : null;
+
+                if ($f02Value !== null || $f03Value !== null) {
+                    $f02Val = $f02Value ?? 0.0;
+                    $f03Val = $f03Value ?? 0.0;
+                    $ippScore = ($f02Val * 0.75) + ($f03Val * 0.25);
+                    $predData = self::getPredikatData($ippScore);
+
+                    $hasilPenilaian = (object) [
+                        'nilai_f02' => $f02Value,
+                        'nilai_f03' => $f03Value,
+                        'nilai_ipp' => $ippScore,
+                        'predikat' => $predData['label'],
+                        'predikat_color' => $predData['color'],
+                        'predikat_bg' => $predData['bg'],
+                    ];
+                }
             }
         }
 
-        // Get dashboard data
-        $dashboardData = $this->getDashboardData($periode->id, $selectedUppIds, $isGlobalUser, $user);
+        // Radar chart and History logic across all periods for this UPP
+        if ($upp) {
+            $completedValidations = F02Validasi::where('f02_validasi.status', 'selesai')
+                ->whereHas('f01', function($q) use ($upp) {
+                    $q->where('upp_id', $upp->id)
+                        ->where('is_latest_version', true);
+                })
+                ->join('periode', 'f02_validasi.periode_id', '=', 'periode.id')
+                ->select('f02_validasi.*', 'periode.nama as periode_nama', 'periode.tahun as periode_tahun')
+                ->orderBy('periode.tahun', 'desc')
+                ->with(['periode', 'f01.jawaban'])
+                ->get();
 
-        // Calculate F02 and F03 aspek scores for charts
-        $f02AspekData = $this->calculateF02AspekScores($periode->id, $selectedUppIds);
-        $f03AspekData = $this->calculateF03AspekScores($periode->id, $selectedUppIds);
+            $historyList = [];
+            foreach ($completedValidations as $val) {
+                $pId = $val->periode_id;
+                $targetRes = $val->periode ? (int)$val->periode->target_responden_f03 : 0;
+                
+                $f02Score = $val->total_nilai ?? 0.0;
+                $f03Stats = $this->getEffectiveF03StatsForUpp($pId, $upp->id, $targetRes);
+                $f03Score = $f03Stats['effective_average'] ?? 0.0;
+                
+                $ipp = round(($f02Score * 0.75) + ($f03Score * 0.25), 2);
+                $predData = self::getPredikatData($ipp);
 
-        return view('dashboard.index', [
-            'user' => $user,
-            'periode' => $periode,
-            'isGlobalUser' => $isGlobalUser,
-            'availableUpps' => $availableUpps,
-            'availableUppsWithScores' => $availableUppsWithScores,
-            'selectedUppIds' => $selectedUppIds,
-            'dashboardData' => $dashboardData,
-            'f02AspekLabels' => array_keys($f02AspekData['aspek_scores'] ?? []),
-            'f02AspekValues' => array_values($f02AspekData['aspek_scores'] ?? []),
-            'f02TotalValidasi' => $f02AspekData['total_validasi'] ?? 0,
-            'f02AverageScore' => $f02AspekData['average_score'] ?? 0,
-            'f03AspekLabels' => array_keys($f03AspekData['aspek_scores'] ?? []),
-            'f03AspekValues' => array_values($f03AspekData['aspek_scores'] ?? []),
-            'f03TotalResponses' => $f03AspekData['total_responses'] ?? 0,
-            'f03AverageScore' => $f03AspekData['average_score'] ?? 0,
-        ]);
+                // Fetch aspects details for modal
+                $aspeksDetails = [];
+                $aspeks = Aspek::where('periode_id', $pId)
+                    ->where('aktif', 1)
+                    ->orderBy('urutan')
+                    ->with(['indikator' => function($q) {
+                        $q->where('aktif', 1)->orderBy('urutan');
+                    }])
+                    ->get();
+                    
+                $f02Indikators = F02IndikatorValidasi::where('f02_validasi_id', $val->id)
+                    ->get()
+                    ->keyBy('indikator_id');
+                    
+                foreach ($aspeks as $aspek) {
+                    $indList = [];
+                    $aspekSum = 0;
+                    $aspekCount = 0;
+                    foreach ($aspek->indikator as $ind) {
+                        $indScore = isset($f02Indikators[$ind->id]) ? (float)$f02Indikators[$ind->id]->nilai : 0.0;
+                        $indPred = self::getPredikatData($indScore)['label'];
+                        $indList[] = [
+                            'nama' => $ind->nama,
+                            'skor' => $indScore,
+                            'predikat' => $indPred,
+                        ];
+                        $aspekSum += $indScore;
+                        $aspekCount++;
+                    }
+                    $aspekAvg = $aspekCount > 0 ? round($aspekSum / $aspekCount, 2) : 0.0;
+                    $aspeksDetails[] = [
+                        'nama' => $aspek->nama,
+                        'skor' => $aspekAvg,
+                        'predikat' => self::getPredikatData($aspekAvg)['label'],
+                        'indikators' => $indList,
+                    ];
+                }
+                
+                $historyList[] = [
+                    'periode_id' => $pId,
+                    'nama' => $val->periode_nama,
+                    'nilai_ipp' => $ipp,
+                    'predikat' => $predData['label'],
+                    'predikat_color' => $predData['color'],
+                    'predikat_bg' => $predData['bg'],
+                    'aspeks' => $aspeksDetails,
+                ];
+
+                // Build radar data aspects
+                $aspekScores = [];
+                foreach ($aspeks as $aspek) {
+                    $indikatorIds = $aspek->indikator()->where('aktif', 1)->pluck('id')->toArray();
+                    $avgScore = F02IndikatorValidasi::where('f02_validasi_id', $val->id)
+                        ->whereIn('indikator_id', $indikatorIds)
+                        ->whereNotNull('nilai')
+                        ->avg('nilai') ?? 0;
+                        
+                    $aspekScores[$aspek->nama] = round($avgScore, 2);
+                }
+                
+                $radarData[] = [
+                    'periode_id' => $pId,
+                    'label' => $val->periode_nama,
+                    'nilai_per_aspek' => $aspekScores,
+                ];
+                
+                $periodeList[] = [
+                    'id' => $pId,
+                    'nama' => $val->periode_nama,
+                ];
+            }
+
+            // Exclude current active period from history card
+            $historyListPast = collect($historyList)->filter(function($h) use ($periodeAktif) {
+                return !$periodeAktif || (int)$h['periode_id'] !== (int)$periodeAktif->id;
+            })->values()->all();
+
+            $periodeSebelumnya = $historyListPast[0] ?? null;
+            if (count($historyListPast) >= 2) {
+                $deltaNilai = (float) $historyListPast[0]['nilai_ipp'] - (float) $historyListPast[1]['nilai_ipp'];
+            }
+        }
+
+        return [
+            'uppName' => $uppName,
+            'uppTerdaftar' => $uppTerdaftar,
+            'progressPerAspek' => $progressPerAspek,
+            'statusPengisian' => $statusPengisian,
+            'urlPengisian' => $urlPengisian,
+            'hasilPenilaian' => $hasilPenilaian,
+            'radarData' => $radarData,
+            'periodeList' => $periodeList,
+            'periodeSebelumnya' => $periodeSebelumnya,
+            'deltaNilai' => $deltaNilai,
+        ];
     }
+
+    /**
+     * Get data variables for Admin Internal dashboard
+     */
+    private function getDataInternal()
+    {
+        $periodeAktif = $this->getPeriodeAktif();
+        $thresholdHari = 7;
+
+        // Source of truth: UPPs registered in user_upp (aktif, peran admin_upp)
+        // Each UPP only counted once even if multiple assignments exist
+        $registeredUppIds = UserUpp::where('aktif', 1)
+            ->where('peran', UserUpp::PERAN_ADMIN_UPP)
+            ->distinct()
+            ->pluck('upp_id');
+
+        $totalCount = $registeredUppIds->count();
+
+        // Build list of UPPs with their assigned user name for display
+        // One record per UPP (first active admin_upp assignment)
+        $uppList = UserUpp::where('aktif', 1)
+            ->where('peran', UserUpp::PERAN_ADMIN_UPP)
+            ->whereIn('upp_id', $registeredUppIds)
+            ->with(['upp', 'user'])
+            ->get()
+            ->unique('upp_id')   // deduplicate
+            ->values();
+
+        // Collections per category
+        $belumMulai        = collect();
+        $sedangMengisi     = collect();
+        $menungguValidasi  = collect();
+        $selesai           = collect();
+        $progressPerUPP    = collect();
+        $uppDeadlineAlert  = collect();
+
+        if ($periodeAktif) {
+            $periodeId = $periodeAktif->id;
+
+            // Load all F01 (latest version) for this period, keyed by upp_id
+            $f01Map = F01Pengisian::where('periode_id', $periodeId)
+                ->where('is_latest_version', true)
+                ->get()
+                ->keyBy('upp_id');
+
+            // Load all completed F02 validasi, keyed by f01_pengisian_id
+            $selesaiUppIds = F02Validasi::where('f02_validasi.status', 'selesai')
+                ->whereHas('f01', function ($q) use ($periodeId, $registeredUppIds) {
+                    $q->where('periode_id', $periodeId)
+                      ->where('is_latest_version', true)
+                      ->whereIn('upp_id', $registeredUppIds);
+                })
+                ->with(['f01'])
+                ->get()
+                ->pluck('f01.upp_id')
+                ->filter()
+                ->unique()
+                ->values();
+
+            // --- Get total indicators count ---
+            $aspeks = Aspek::where('periode_id', $periodeId)
+                ->where('aktif', 1)
+                ->with(['indikator' => function ($q) {
+                    $q->where('aktif', 1)->with('pertanyaan');
+                }])
+                ->get();
+
+            $totalIndicatorsCount = $aspeks->sum(fn($a) => $a->indikator->count());
+
+            foreach ($uppList as $userUppRecord) {
+                $upp      = $userUppRecord->upp;
+                $userName = $userUppRecord->user?->nama ?? '—';
+
+                if (!$upp) continue;
+
+                $f01   = $f01Map->get($upp->id);
+
+                // --- Calculate Progress First ---
+                $progressPercent = 0;
+                if ($f01) {
+                    if (!$f01->relationLoaded('jawaban')) {
+                        $f01->load('jawaban');
+                    }
+                    $completed = 0;
+                    foreach ($aspeks as $aspek) {
+                        foreach ($aspek->indikator as $ind) {
+                            $questions = $ind->pertanyaan;
+                            if ($questions->isEmpty()) {
+                                $completed++;
+                                continue;
+                            }
+                            $answered = $questions->filter(function ($q) use ($f01) {
+                                $jaw = $f01->jawaban->firstWhere('pertanyaan_id', $q->id);
+                                return $jaw && $jaw->nilai !== null && $jaw->nilai !== '';
+                            })->count();
+                            if ($answered > 0) $completed++;
+                        }
+                    }
+                    $progressPercent = $totalIndicatorsCount > 0
+                        ? round(($completed / $totalIndicatorsCount) * 100)
+                        : 0;
+                }
+
+                $entry = (object) [
+                    'upp_id'    => $upp->id,
+                    'nama_upp'  => $upp->nama,
+                    'user_nama' => $userName,
+                    'f01'       => $f01,
+                    'f01_status'=> $f01?->status ?? null,
+                ];
+
+                $statusLabel = 'belum_mulai';
+
+                // --- Classify ---
+                if ($selesaiUppIds->contains($upp->id)) {
+                    // F02 sudah selesai divalidasi
+                    $selesai->push($entry);
+                    $statusLabel = 'selesai';
+                } elseif (!$f01) {
+                    // Belum ada aktivitas F01 sama sekali
+                    $belumMulai->push($entry);
+                    $statusLabel = 'belum_mulai';
+                } elseif ($f01->status === 'submitted') {
+                    // F01 sudah dikirim, menunggu validasi
+                    $menungguValidasi->push($entry);
+                    $statusLabel = 'menunggu_validasi';
+                } else {
+                    // F01 ada tapi draft/rolled_back — sedang mengisi
+                    if ($progressPercent == 0) {
+                        $belumMulai->push($entry);
+                        $statusLabel = 'belum_mulai';
+                    } else {
+                        $sedangMengisi->push($entry);
+                        $statusLabel = 'sedang_mengisi';
+                    }
+                }
+
+                // --- Progress Chart ---
+                $progressPerUPP->push((object) [
+                    'nama_upp'       => $upp->nama,
+                    'status'         => $statusLabel,
+                    'persen_progress'=> $progressPercent,
+                ]);
+            }
+
+            // --- Deadline Alert ---
+            $today    = \Carbon\Carbon::today();
+            $endDate  = \Carbon\Carbon::parse($periodeAktif->tanggal_selesai);
+            $sisaHari = (int) $today->diffInDays($endDate, false);
+
+            if ($sisaHari <= $thresholdHari) {
+                foreach ([$belumMulai, $sedangMengisi, $menungguValidasi] as $group) {
+                    foreach ($group as $entry) {
+                        $uppDeadlineAlert->push((object) [
+                            'nama_upp'  => $entry->nama_upp,
+                            'status'    => $entry->f01_status ?? 'belum_mulai',
+                            'sisa_hari' => $sisaHari,
+                        ]);
+                    }
+                }
+                $uppDeadlineAlert = $uppDeadlineAlert->sortBy('sisa_hari')->values();
+            }
+        }
+
+        $summaryCards = [
+            'total'            => ['count' => $totalCount,                  'list' => collect()],
+            'belum_mulai'      => ['count' => $belumMulai->count(),         'list' => $belumMulai],
+            'sedang_mengisi'   => ['count' => $sedangMengisi->count(),      'list' => $sedangMengisi],
+            'menunggu_validasi'=> ['count' => $menungguValidasi->count(),   'list' => $menungguValidasi],
+            'selesai'          => ['count' => $selesai->count(),            'list' => $selesai],
+        ];
+
+        return [
+            'summaryCards'    => $summaryCards,
+            'progressPerUPP'  => $progressPerUPP,
+            'uppDeadlineAlert'=> $uppDeadlineAlert,
+            'thresholdHari'   => $thresholdHari,
+            'uppTerdaftar'    => true,
+        ];
+    }
+
+
 
     /**
      * Get UPPs available to the user
@@ -490,7 +937,7 @@ class DashboardController extends Controller
      */
     private function calculateF02AspekScores($periodeId, $selectedUppIds)
     {
-        $aspeks = Aspek::all();
+        $aspeks = Aspek::where('periode_id', $periodeId)->get();
         $f02AspekScores = [];
 
         // If selectedUppIds is empty, calculate for ALL UPPs (aggregated mode)
@@ -560,7 +1007,7 @@ class DashboardController extends Controller
      */
     private function calculateF03AspekScores($periodeId, $selectedUppIds)
     {
-        $aspeks = \App\Models\F03Aspek::all();
+        $aspeks = \App\Models\F03Aspek::where('periode_id', $periodeId)->get();
         $f03AspekScores = [];
 
         // If selectedUppIds is empty, calculate for ALL UPPs (aggregated mode)

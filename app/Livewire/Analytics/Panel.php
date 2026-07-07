@@ -34,11 +34,22 @@ class Panel extends Component
     public $f03_labels = [];
     public $f03_data = [];
 
+    // Chart Data - F03 Indikator (Rata-rata skor per indikator)
+    public $f03_indikator_ids = [];
+    public $f03_indikator_labels = [];
+    public $f03_indikator_values = [];
+
+    // Backward-compatible aliases used by the existing render pipeline.
+    public $f03_aspek_ids = [];
+    public $f03_aspek_labels = [];
+    public $f03_aspek_values = [];
+
     // Chart Data - IPP
     public $ipp_labels = [];
     public $ipp_data = [];
 
     // Chart Data - Aspek (Agregasi Total F02 per Aspek)
+    public $aspek_ids = [];
     public $aspek_labels = [];
     public $aspek_values = [];
     public $aspek_tabs = [];
@@ -54,8 +65,24 @@ class Panel extends Component
     public $summary_cards = [];
     public $summary_card_details = [];
 
+    // Indicator Detail Modal
+    public $indicator_detail = null;
+    public $indicator_detail_visible = false;
+    public $selected_score_for_upp = null;
+
+    // Aspek Detail Modal
+    public $aspek_detail = null;
+    public $aspek_detail_visible = false;
+
     public function mount()
     {
+        if (empty($this->periode_id)) {
+            $activePeriode = DB::table('periode')->whereNull('deleted_at')->where('is_aktif', 1)->first();
+            if ($activePeriode) {
+                $this->periode_id = $activePeriode->id;
+            }
+        }
+        
         $this->upp_id = $this->normalizeUppIds($this->upp_id);
         $this->loadFilterOptions();
         $this->loadAllChartData();
@@ -65,6 +92,7 @@ class Panel extends Component
     public function updatedUppId()
     {
         $this->upp_id = $this->normalizeUppIds($this->upp_id);
+        $this->closeAspekDetail();
         $this->loadAllChartData();
         $this->dispatchChartDataUpdated();
     }
@@ -72,6 +100,7 @@ class Panel extends Component
     // Reactive update when periode_id changes
     public function updatedPeriodeId()
     {
+        $this->closeAspekDetail();
         $this->loadFilterOptions();
         $this->loadAllChartData();
         $this->dispatchChartDataUpdated();
@@ -83,38 +112,40 @@ class Panel extends Component
             // Load periode options
             $this->periode_options = DB::table('periode')
                 ->select('id', 'tahun', 'nama')
-                ->where('is_aktif', 1)
+                ->whereNull('deleted_at')
                 ->orderByDesc('tahun')
                 ->orderBy('nama')
                 ->get()
                 ->map(fn($p) => ['id' => $p->id, 'label' => $p->tahun . ' - ' . $p->nama])
                 ->toArray();
 
-            // Base UPP list with display labels
-            $uppBase = DB::table('upps as u')
-                ->leftJoin('user_upp as uu', function($join) {
-                    $join->on('u.id', '=', 'uu.upp_id')
-                        ->where('uu.aktif', 1);
-                })
-                ->leftJoin('users as us', 'uu.user_id', '=', 'us.id')
+            // Base UPP list with display labels taken from user_upp
+            $uppBase = DB::table('user_upp as uu')
+                ->join('upps as u', 'uu.upp_id', '=', 'u.id')
+                ->join('users as usr', 'uu.user_id', '=', 'usr.id')
                 ->select(
                     'u.id',
                     'u.kode',
                     'u.nama',
-                    DB::raw('SUBSTRING_INDEX(us.email, "@", 1) as email_username')
+                    'usr.email'
                 )
                 ->where('u.aktif', 1)
+                ->where('uu.aktif', 1) // Only active user assignments
                 ->get()
+                ->unique('id') // Ensure unique UPP if there are multiple users
                 ->map(function($u) {
-                    $label = $u->email_username
-                        ? strtoupper($u->email_username)
-                        : $u->nama;
+                    $label = $u->nama;
+                    if (!empty($u->email)) {
+                        $emailParts = explode('@', $u->email);
+                        $label = $emailParts[0]; // Take username part before @
+                    }
 
                     return [
                         'id' => (int) $u->id,
-                        'label' => $label,
+                        'label' => strtoupper($label),
                     ];
-                });
+                })
+                ->values();
 
             // F02 averages per UPP (latest version, non-draft)
             $f02Rows = DB::table('f02_validasi as fv')
@@ -166,8 +197,34 @@ class Panel extends Component
                 ->get()
                 ->keyBy('upp_id');
 
+            // F01 submitted (status != draft, meaning dikirim/diverifikasi/dikembalikan)
+            $f01SubmittedRows = DB::table('f01_pengisian as fp')
+                ->select('upp_id', DB::raw('COUNT(*) as total'))
+                ->where('is_latest_version', 1)
+                ->whereNotNull('dikirim_pada')
+                ->whereNull('deleted_at')
+                ->when(!empty($this->periode_id), function ($query) {
+                    $query->where('periode_id', $this->periode_id);
+                })
+                ->groupBy('upp_id')
+                ->get()
+                ->keyBy('upp_id');
+
+            // F02 validation (any status, to check if belum validasi)
+            $f02ValidationRows = DB::table('f02_validasi as fv')
+                ->join('f01_pengisian as fp', 'fv.f01_pengisian_id', '=', 'fp.id')
+                ->select('fp.upp_id', DB::raw('COUNT(*) as total'))
+                ->where('fp.is_latest_version', 1)
+                ->whereNull('fp.deleted_at')
+                ->when(!empty($this->periode_id), function ($query) {
+                    $query->where('fv.periode_id', $this->periode_id);
+                })
+                ->groupBy('fp.upp_id')
+                ->get()
+                ->keyBy('upp_id');
+
             $this->upp_options = $uppBase
-                ->map(function ($upp) use ($f02Rows, $f03Rows, $f03ResponseRows, $readyRows, $minimumResponses) {
+                ->map(function ($upp) use ($f02Rows, $f03Rows, $f03ResponseRows, $readyRows, $f01SubmittedRows, $f02ValidationRows, $minimumResponses) {
                     $f02Avg = isset($f02Rows[$upp['id']]) ? (float) $f02Rows[$upp['id']]->f02_avg : 0.0;
                     $f03Avg = isset($f03Rows[$upp['id']]) ? (float) $f03Rows[$upp['id']]->f03_avg : 0.0;
                     $f03Count = isset($f03ResponseRows[$upp['id']]) ? (int) $f03ResponseRows[$upp['id']]->total_responses : 0;
@@ -176,6 +233,29 @@ class Panel extends Component
 
                     $upp['ipp_value'] = round($ippValue, 4);
                     $upp['is_export_ready'] = isset($readyRows[$upp['id']]) && (int) $readyRows[$upp['id']]->total > 0;
+
+                    // Determine validation status
+                    $hasF01Submitted = isset($f01SubmittedRows[$upp['id']]) && (int) $f01SubmittedRows[$upp['id']]->total > 0;
+                    $hasF02Validation = isset($f02ValidationRows[$upp['id']]) && (int) $f02ValidationRows[$upp['id']]->total > 0;
+                    $hasF02Complete = isset($readyRows[$upp['id']]) && (int) $readyRows[$upp['id']]->total > 0;
+
+                    // Status: Sudah Validasi, Belum Validasi (Sudah Submit), or Belum Submit
+                    if ($hasF02Complete) {
+                        $upp['validation_status'] = 'sudah_validasi';
+                        $upp['validation_label'] = 'Sudah Validasi';
+                        $upp['validation_color'] = '#166534';
+                        $upp['validation_bg'] = '#bbf7d0';
+                    } elseif ($hasF01Submitted) {
+                        $upp['validation_status'] = 'belum_validasi';
+                        $upp['validation_label'] = 'Belum Validasi (Sudah Submit)';
+                        $upp['validation_color'] = '#b45309';
+                        $upp['validation_bg'] = '#fef3c7';
+                    } else {
+                        $upp['validation_status'] = 'belum_submit';
+                        $upp['validation_label'] = 'Belum Submit';
+                        $upp['validation_color'] = '#dc2626';
+                        $upp['validation_bg'] = '#fee2e2';
+                    }
 
                     return $upp;
                 })
@@ -202,14 +282,24 @@ class Panel extends Component
 
     public function loadAllChartData()
     {
-        try {
-            $this->loadF02ChartData();
-            $this->loadF03ChartData();
-            $this->loadIPPChartData();
-            $this->loadAspekChartData();
-            $this->loadSummaryCards();
-        } catch (\Exception $e) {
-            Log::error('Error loading chart data', ['error' => $e->getMessage()]);
+        $loaders = [
+            'loadF02ChartData',
+            'loadF03ChartData',
+            'loadF03AspekChartData',
+            'loadIPPChartData',
+            'loadAspekChartData',
+            'loadSummaryCards',
+        ];
+
+        foreach ($loaders as $loader) {
+            try {
+                $this->{$loader}();
+            } catch (\Throwable $e) {
+                Log::error('Error loading analytics segment', [
+                    'loader' => $loader,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         }
     }
 
@@ -406,6 +496,7 @@ class Panel extends Component
 
         $validatedUppCount = (int) $validatedQuery->distinct('fp.upp_id')->count('fp.upp_id');
         $pendingValidationCount = max($submittedUppCount - $validatedUppCount, 0);
+        $notSubmittedUppCount = max($totalUpp - $submittedUppCount, 0);
 
         $ippCategory = $this->getIppCategoryMeta((float) $avgIpp);
 
@@ -422,6 +513,7 @@ class Panel extends Component
             'upp_baik' => $uppBaik,
             'upp_perlu_pembinaan' => $uppPerluPembinaan,
             'sudah_submit' => $submittedUppCount,
+            'belum_submit' => $notSubmittedUppCount,
             'belum_validasi' => $pendingValidationCount,
             'sudah_selesai' => $validatedUppCount,
             'f03_response_count' => $totalF03Responses,
@@ -470,6 +562,11 @@ class Panel extends Component
 
         $pendingRows = $submittedRows
             ->filter(fn($row) => empty($row['validated_at']))
+            ->sortByDesc('ipp')
+            ->values();
+
+        $notSubmittedRows = $scopedRows
+            ->filter(fn($row) => empty($row['submitted_at']))
             ->sortByDesc('ipp')
             ->values();
 
@@ -533,6 +630,13 @@ class Panel extends Component
                     return 'Submit: ' . $submitAt;
                 }),
             ],
+            'belum_submit' => [
+                'title' => 'Daftar UPP Belum Submit F02/F01',
+                'subtitle' => 'UPP yang belum mengirim pengisian pada filter aktif',
+                'rows' => $toRows($notSubmittedRows, 'ipp', 'Nilai IPP', function ($row) {
+                    return 'Status: Belum Submit';
+                }),
+            ],
             'belum_validasi' => [
                 'title' => 'Daftar UPP Belum Validasi F02',
                 'subtitle' => 'UPP yang sudah submit namun belum selesai divalidasi',
@@ -550,6 +654,76 @@ class Panel extends Component
                 }),
             ],
         ];
+
+        // Add IPP Category breakdowns
+        $ippCategoryA = $scopedRows->filter(fn($row) => (float) ($row['ipp'] ?? 0) > 4.50)->sortByDesc('ipp')->values();
+        $ippCategoryAMinus = $scopedRows->filter(fn($row) => (float) ($row['ipp'] ?? 0) > 4.00 && (float) ($row['ipp'] ?? 0) <= 4.50)->sortByDesc('ipp')->values();
+        $ippCategoryB = $scopedRows->filter(fn($row) => (float) ($row['ipp'] ?? 0) > 3.50 && (float) ($row['ipp'] ?? 0) <= 4.00)->sortByDesc('ipp')->values();
+        $ippCategoryBMinus = $scopedRows->filter(fn($row) => (float) ($row['ipp'] ?? 0) > 3.00 && (float) ($row['ipp'] ?? 0) <= 3.50)->sortByDesc('ipp')->values();
+        $ippCategoryC = $scopedRows->filter(fn($row) => (float) ($row['ipp'] ?? 0) > 2.50 && (float) ($row['ipp'] ?? 0) <= 3.00)->sortByDesc('ipp')->values();
+        $ippCategoryCMinus = $scopedRows->filter(fn($row) => (float) ($row['ipp'] ?? 0) > 2.00 && (float) ($row['ipp'] ?? 0) <= 2.50)->sortByDesc('ipp')->values();
+        $ippPrioritasPembinaan = $scopedRows->filter(fn($row) => (float) ($row['ipp'] ?? 0) <= 2.00)->sortByDesc('ipp')->values();
+
+        // Add counts to summary_cards
+        $this->summary_cards['ipp_a_prima'] = $ippCategoryA->count();
+        $this->summary_cards['ipp_a_minus'] = $ippCategoryAMinus->count();
+        $this->summary_cards['ipp_b'] = $ippCategoryB->count();
+        $this->summary_cards['ipp_b_minus'] = $ippCategoryBMinus->count();
+        $this->summary_cards['ipp_c'] = $ippCategoryC->count();
+        $this->summary_cards['ipp_c_minus'] = $ippCategoryCMinus->count();
+        $this->summary_cards['ipp_prioritas_pembinaan'] = $ippPrioritasPembinaan->count();
+
+        // Add IPP category details
+        $this->summary_card_details['ipp_a_prima'] = [
+            'title' => 'Daftar UPP - Pelayanan Prima (A)',
+            'subtitle' => 'IPP > 4.50, urut tertinggi ke terendah',
+            'rows' => $toRows($ippCategoryA, 'ipp', 'Nilai IPP', function ($row) {
+                return 'F02: ' . number_format((float) ($row['f02'] ?? 0), 2) . ' | F03: ' . number_format((float) ($row['f03_effective'] ?? 0), 2);
+            }),
+        ];
+        $this->summary_card_details['ipp_a_minus'] = [
+            'title' => 'Daftar UPP - Sangat Baik (A-)',
+            'subtitle' => 'IPP 4.01-4.50, urut tertinggi ke terendah',
+            'rows' => $toRows($ippCategoryAMinus, 'ipp', 'Nilai IPP', function ($row) {
+                return 'F02: ' . number_format((float) ($row['f02'] ?? 0), 2) . ' | F03: ' . number_format((float) ($row['f03_effective'] ?? 0), 2);
+            }),
+        ];
+        $this->summary_card_details['ipp_b'] = [
+            'title' => 'Daftar UPP - Baik (B)',
+            'subtitle' => 'IPP 3.51-4.00, urut tertinggi ke terendah',
+            'rows' => $toRows($ippCategoryB, 'ipp', 'Nilai IPP', function ($row) {
+                return 'F02: ' . number_format((float) ($row['f02'] ?? 0), 2) . ' | F03: ' . number_format((float) ($row['f03_effective'] ?? 0), 2);
+            }),
+        ];
+        $this->summary_card_details['ipp_b_minus'] = [
+            'title' => 'Daftar UPP - Baik Dengan Catatan (B-)',
+            'subtitle' => 'IPP 3.01-3.50, urut tertinggi ke terendah',
+            'rows' => $toRows($ippCategoryBMinus, 'ipp', 'Nilai IPP', function ($row) {
+                return 'F02: ' . number_format((float) ($row['f02'] ?? 0), 2) . ' | F03: ' . number_format((float) ($row['f03_effective'] ?? 0), 2);
+            }),
+        ];
+        $this->summary_card_details['ipp_c'] = [
+            'title' => 'Daftar UPP - Cukup (C)',
+            'subtitle' => 'IPP 2.51-3.00, urut tertinggi ke terendah',
+            'rows' => $toRows($ippCategoryC, 'ipp', 'Nilai IPP', function ($row) {
+                return 'F02: ' . number_format((float) ($row['f02'] ?? 0), 2) . ' | F03: ' . number_format((float) ($row['f03_effective'] ?? 0), 2);
+            }),
+        ];
+        $this->summary_card_details['ipp_c_minus'] = [
+            'title' => 'Daftar UPP - Cukup Dengan Catatan (C-)',
+            'subtitle' => 'IPP 2.01-2.50, urut tertinggi ke terendah',
+            'rows' => $toRows($ippCategoryCMinus, 'ipp', 'Nilai IPP', function ($row) {
+                return 'F02: ' . number_format((float) ($row['f02'] ?? 0), 2) . ' | F03: ' . number_format((float) ($row['f03_effective'] ?? 0), 2);
+            }),
+        ];
+        $this->summary_card_details['ipp_prioritas_pembinaan'] = [
+            'title' => 'Daftar UPP - Prioritas Pembinaan',
+            'subtitle' => 'IPP <= 2.00 (Kategori D, E, F), urut tertinggi ke terendah',
+            'rows' => $toRows($ippPrioritasPembinaan, 'ipp', 'Nilai IPP', function ($row) {
+                $ippMeta = $this->getIppCategoryMeta((float) ($row['ipp'] ?? 0));
+                return 'Kategori: ' . $ippMeta['kategori'] . ' | F02: ' . number_format((float) ($row['f02'] ?? 0), 2) . ' | F03: ' . number_format((float) ($row['f03_effective'] ?? 0), 2);
+            }),
+        ];
     }
 
     public function loadF02ChartData()
@@ -559,20 +733,14 @@ class Panel extends Component
         $query = DB::table('f02_validasi as fv')
             ->join('f01_pengisian as fp', 'fv.f01_pengisian_id', '=', 'fp.id')
             ->join('upps as u', 'fp.upp_id', '=', 'u.id')
-            ->leftJoin('user_upp as uu', function($join) {
-                $join->on('u.id', '=', 'uu.upp_id')
-                    ->where('uu.aktif', 1);
-            })
-            ->leftJoin('users as us', 'uu.user_id', '=', 'us.id')
             ->select(
                 'fp.upp_id',
                 'u.nama as upp_nama',
-                DB::raw('SUBSTRING_INDEX(us.email, "@", 1) as email_username'),
                 DB::raw('SUM(COALESCE(fv.total_nilai, 0)) as total_skor')
             )
             ->where('fp.is_latest_version', 1)
             ->where('fv.status', '!=', 'draft')
-            ->groupBy('fp.upp_id', 'u.nama', 'email_username');
+            ->groupBy('fp.upp_id', 'u.nama');
 
         if (!empty($this->periode_id)) {
             $query->where('fv.periode_id', '=', $this->periode_id);
@@ -587,10 +755,9 @@ class Panel extends Component
 
         $data = $data->filter(fn($row) => $row->total_skor > 0);
 
-        $this->f02_labels = $data->map(function($row) {
-            return $row->email_username
-                ? strtoupper($row->email_username)
-                : $row->upp_nama;
+        $labelByUppId = collect($this->upp_options)->pluck('label', 'id');
+        $this->f02_labels = $data->map(function($row) use ($labelByUppId) {
+            return $labelByUppId->get((int) $row->upp_id, strtoupper($row->upp_nama));
         })->toArray();
         $this->f02_data = $data->map(fn($row) => (float)$row->total_skor)->toArray();
     }
@@ -601,19 +768,13 @@ class Panel extends Component
         $query = DB::table('f03_jawaban as fj')
             ->join('f03_pengisian as fp', 'fj.f03_pengisian_id', '=', 'fp.id')
             ->join('upps as u', 'fp.upp_id', '=', 'u.id')
-            ->leftJoin('user_upp as uu', function($join) {
-                $join->on('u.id', '=', 'uu.upp_id')
-                    ->where('uu.aktif', 1);
-            })
-            ->leftJoin('users as us', 'uu.user_id', '=', 'us.id')
             ->select(
                 'fp.upp_id',
                 'u.nama as upp_nama',
-                DB::raw('SUBSTRING_INDEX(us.email, "@", 1) as email_username'),
                 DB::raw('AVG(COALESCE(fj.score, 0)) as total_skor')
             )
             ->where('fp.deleted_at', null)
-            ->groupBy('fp.upp_id', 'u.nama', 'email_username');
+            ->groupBy('fp.upp_id', 'u.nama');
 
         if (!empty($this->periode_id)) {
             $query->where('fp.periode_id', '=', $this->periode_id);
@@ -629,10 +790,9 @@ class Panel extends Component
         // Filter out zero scores
         $data = $data->filter(fn($row) => $row->total_skor > 0);
 
-        $this->f03_labels = $data->map(function($row) {
-            return $row->email_username
-                ? strtoupper($row->email_username)
-                : $row->upp_nama;
+        $labelByUppId = collect($this->upp_options)->pluck('label', 'id');
+        $this->f03_labels = $data->map(function($row) use ($labelByUppId) {
+            return $labelByUppId->get((int) $row->upp_id, strtoupper($row->upp_nama));
         })->toArray();
         $this->f03_data = $data->map(fn($row) => (float)$row->total_skor)->toArray();
     }
@@ -646,20 +806,14 @@ class Panel extends Component
         $f02Query = DB::table('f02_validasi as fv')
             ->join('f01_pengisian as fp', 'fv.f01_pengisian_id', '=', 'fp.id')
             ->join('upps as u', 'fp.upp_id', '=', 'u.id')
-            ->leftJoin('user_upp as uu', function($join) {
-                $join->on('u.id', '=', 'uu.upp_id')
-                    ->where('uu.aktif', 1);
-            })
-            ->leftJoin('users as us', 'uu.user_id', '=', 'us.id')
             ->select(
                 'fp.upp_id',
                 'u.nama as upp_nama',
-                DB::raw('SUBSTRING_INDEX(us.email, "@", 1) as email_username'),
                 DB::raw('AVG(COALESCE(fv.total_nilai, 0)) as f02_avg')
             )
             ->where('fp.is_latest_version', 1)
             ->where('fv.status', '!=', 'draft')
-            ->groupBy('fp.upp_id', 'u.nama', 'email_username');
+            ->groupBy('fp.upp_id', 'u.nama');
 
         if (!empty($this->periode_id)) {
             $f02Query->where('fv.periode_id', '=', $this->periode_id);
@@ -723,12 +877,76 @@ class Panel extends Component
             ->filter(fn($row) => $row->ipp_value > 0)
             ->sortByDesc('ipp_value');
 
-        $this->ipp_labels = $combinedData->map(function($row) {
-            return $row->email_username
-                ? strtoupper($row->email_username)
-                : $row->upp_nama;
+        $labelByUppId = collect($this->upp_options)->pluck('label', 'id');
+        $this->ipp_labels = $combinedData->map(function($row) use ($labelByUppId) {
+            return $labelByUppId->get((int) $row->upp_id, strtoupper($row->upp_nama));
         })->values()->toArray();
         $this->ipp_data = $combinedData->map(fn($row) => (float)$row->ipp_value)->values()->toArray();
+    }
+
+    public function loadF03AspekChartData()
+    {
+        $scopedUppIds = $this->getScopedUppIds();
+
+        // Aggregate F03 scores per UPP and Aspek
+        $perUppAspekScores = DB::table('f03_jawaban as fj')
+            ->join('f03_pengisian as fp', 'fj.f03_pengisian_id', '=', 'fp.id')
+            ->join('f03_indikator as fi', 'fj.f03_indikator_id', '=', 'fi.id')
+            ->join('f03_aspek as asp', 'fi.f03_aspek_id', '=', 'asp.id')
+            ->select(
+                'fp.upp_id',
+                'fi.f03_aspek_id as aspek_id',
+                DB::raw('AVG(COALESCE(fj.score, 0)) as upp_avg_score')
+            )
+            ->whereNull('fp.deleted_at')
+            ->whereNull('fi.deleted_at')
+            ->whereNull('asp.deleted_at')
+            ->when(!empty($this->periode_id), function ($query) {
+                $query->where('fp.periode_id', '=', $this->periode_id);
+            })
+            ->when(!empty($scopedUppIds), function ($query) use ($scopedUppIds) {
+                $query->whereIn('fp.upp_id', $scopedUppIds);
+            })
+            ->groupBy('fp.upp_id', 'fi.f03_aspek_id');
+
+        // Average across all UPP per Aspek
+        $data = DB::query()
+            ->fromSub($perUppAspekScores, 'aspek_scores')
+            ->join('aspek as asp', 'aspek_scores.aspek_id', '=', 'asp.id')
+            ->select(
+                'asp.id as aspek_id',
+                'asp.kode as aspek_kode',
+                'asp.nama as aspek_nama',
+                'asp.urutan as aspek_urutan',
+                DB::raw('AVG(aspek_scores.upp_avg_score) as avg_score')
+            )
+            ->groupBy('asp.id', 'asp.kode', 'asp.nama', 'asp.urutan')
+            ->orderBy('asp.urutan')
+            ->orderBy('asp.id')
+            ->get();
+
+        $labels = $data->map(function ($row) {
+            $kode = trim((string) ($row->aspek_kode ?? ''));
+            $nama = trim((string) ($row->aspek_nama ?? ''));
+
+            if ($kode !== '' && $nama !== '') {
+                return $kode . ' - ' . Str::limit($nama, 70);
+            }
+
+            return $kode !== '' ? $kode : $nama;
+        })->toArray();
+
+        $values = $data->map(fn($row) => round((float) $row->avg_score, 4))->toArray();
+        $ids = $data->map(fn($row) => (int) $row->aspek_id)->toArray();
+
+        $this->f03_aspek_ids = $ids;
+        $this->f03_aspek_labels = $labels;
+        $this->f03_aspek_values = $values;
+
+        // Keep backward-compatibility aliases
+        $this->f03_indikator_ids = $ids;
+        $this->f03_indikator_labels = $labels;
+        $this->f03_indikator_values = $values;
     }
 
     public function loadAspekChartData()
@@ -739,6 +957,9 @@ class Panel extends Component
         // 2. COUNT(DISTINCT upp_id) = jumlah UPP yang berkontribusi pada aspek
         // 3. Bobot Aspek = bobot dari tabel aspek (dalam persen)
         // 4. COUNT(indikator_unik) = jumlah indikator dalam aspek
+
+        $scopedUppIds = $this->getScopedUppIds();
+        $totalScopedUpp = count($scopedUppIds);
 
         $query = DB::table('f02_indikator_validasi as fiv')
             ->join('f02_validasi as fv', 'fiv.f02_validasi_id', '=', 'fv.id')
@@ -762,30 +983,42 @@ class Panel extends Component
             $query->where('fv.periode_id', '=', $this->periode_id);
         }
 
-        $selectedUppIds = $this->normalizeUppIds($this->upp_id);
-        if (!empty($selectedUppIds)) {
-            $query->whereIn('fp.upp_id', $selectedUppIds);
+        if (!empty($scopedUppIds)) {
+            $query->whereIn('fp.upp_id', $scopedUppIds);
         }
 
         $data = $query->orderBy('asp.id')->get();
+        $radarData = $data->reject(function ($row) {
+            return trim((string) ($row->aspek_nama ?? '')) === 'Informasi Tambahan';
+        })->values();
 
         // Build simple chart data for bar chart
-        $this->aspek_labels = $data->map(fn($row) => $row->aspek_nama)->toArray();
-        $this->aspek_values = $data->map(fn($row) => (float)$row->skor_aspek)->toArray();
-
-        $this->aspek_tabs = $data->map(function ($row) {
-            $totalUpp = (int) ($row->total_upp ?? 0);
+        // Use simple average of indicators per aspek (total_nilai / total_upp / jumlah_indikator)
+        // instead of weighted score (skor_aspek)
+        $this->aspek_ids = $radarData->map(fn($row) => (int) $row->aspek_id)->toArray();
+        $this->aspek_labels = $radarData->map(fn($row) => $row->aspek_nama)->toArray();
+        $this->aspek_values = $radarData->map(function ($row) use ($totalScopedUpp) {
             $jumlahIndikator = (int) ($row->jumlah_indikator ?? 0);
-            $rawRataRata = ($totalUpp > 0 && $jumlahIndikator > 0)
-                ? ((float) $row->total_nilai / $totalUpp / $jumlahIndikator)
+            return ($totalScopedUpp > 0 && $jumlahIndikator > 0)
+                ? round((float) $row->total_nilai / $totalScopedUpp / $jumlahIndikator, 4)
                 : 0.0;
+        })->toArray();
+
+        $this->aspek_tabs = $data->map(function ($row) use ($totalScopedUpp) {
+            $jumlahIndikator = (int) ($row->jumlah_indikator ?? 0);
+            $rawRataRata = ($totalScopedUpp > 0 && $jumlahIndikator > 0)
+                ? ((float) $row->total_nilai / $totalScopedUpp / $jumlahIndikator)
+                : 0.0;
+
+            $bobotAspek = (float) ($row->bobot_aspek ?? 0);
+            $skorSetelahBobot = ($rawRataRata * $bobotAspek) / 100;
 
             return [
                 'id' => (int) $row->aspek_id,
                 'nama' => $row->aspek_nama,
-                'bobot_aspek' => (float) $row->bobot_aspek,
+                'bobot_aspek' => $bobotAspek,
                 'rata_rata_indikator' => round($rawRataRata, 4),
-                'skor_setelah_bobot' => round((float) $row->skor_aspek, 4),
+                'skor_setelah_bobot' => round($skorSetelahBobot, 4),
             ];
         })->values()->toArray();
 
@@ -793,22 +1026,22 @@ class Panel extends Component
         if (empty($aspekIds)) {
             $this->aspek_indikator_scores = [];
             $this->selected_aspek_id = null;
+            $this->closeAspekDetail();
             return;
         }
 
         $indikatorScoreSubquery = DB::table('f02_indikator_validasi as fiv')
             ->join('f02_validasi as fv', 'fiv.f02_validasi_id', '=', 'fv.id')
             ->join('f01_pengisian as fp', 'fv.f01_pengisian_id', '=', 'fp.id')
-            ->select('fiv.indikator_id', DB::raw('AVG(COALESCE(fiv.nilai, 0)) as avg_nilai'))
+            ->select('fiv.indikator_id', DB::raw('SUM(COALESCE(fiv.nilai, 0)) as total_nilai'))
             ->where('fp.is_latest_version', 1)
             ->where('fv.status', '!=', 'draft')
             ->when(!empty($this->periode_id), function ($query) {
                 $query->where('fv.periode_id', '=', $this->periode_id);
             });
 
-        $selectedUppIds = $this->normalizeUppIds($this->upp_id);
-        if (!empty($selectedUppIds)) {
-            $indikatorScoreSubquery->whereIn('fp.upp_id', $selectedUppIds);
+        if (!empty($scopedUppIds)) {
+            $indikatorScoreSubquery->whereIn('fp.upp_id', $scopedUppIds);
         }
 
         $indikatorScoreSubquery->groupBy('fiv.indikator_id');
@@ -825,7 +1058,7 @@ class Panel extends Component
                 'ind.kode as indikator_kode',
                 'ind.nama as indikator_nama',
                 'ind.urutan as indikator_urutan',
-                DB::raw('COALESCE(score_map.avg_nilai, 0) as indikator_skor')
+                DB::raw('COALESCE(score_map.total_nilai, 0) as indikator_total_nilai')
             )
             ->whereIn('asp.id', $aspekIds)
             ->where('ind.aktif', 1)
@@ -836,14 +1069,19 @@ class Panel extends Component
 
         $this->aspek_indikator_scores = $indikatorRows
             ->groupBy('aspek_id')
-            ->map(function ($rows) {
-                return $rows->values()->map(function ($row, $index) {
+            ->map(function ($rows) use ($totalScopedUpp) {
+                return $rows->values()->map(function ($row, $index) use ($totalScopedUpp) {
+                    $indikatorTotalNilai = (float) ($row->indikator_total_nilai ?? 0);
+                    $indikatorSkor = $totalScopedUpp > 0
+                        ? ($indikatorTotalNilai / $totalScopedUpp)
+                        : 0.0;
+
                     return [
                         'no' => $index + 1,
                         'indikator_id' => (int) $row->indikator_id,
                         'indikator_kode' => $row->indikator_kode,
                         'indikator_nama' => $row->indikator_nama,
-                        'indikator_skor' => round((float) $row->indikator_skor, 4),
+                        'indikator_skor' => round($indikatorSkor, 4),
                     ];
                 })->toArray();
             })
@@ -858,6 +1096,7 @@ class Panel extends Component
     public function updateFilters()
     {
         $this->resetPage();
+        $this->closeAspekDetail();
         $this->loadAllChartData();
         $this->dispatchChartDataUpdated();
     }
@@ -867,6 +1106,7 @@ class Panel extends Component
         $this->periode_id = null;
         $this->upp_id = [];
         $this->resetPage();
+        $this->closeAspekDetail();
         $this->loadAllChartData();
         $this->dispatchChartDataUpdated();
     }
@@ -961,10 +1201,24 @@ class Panel extends Component
     #[On('setUppFilter')]
     public function setUppFilter($upp_id)
     {
-        $this->upp_id = $this->normalizeUppIds($upp_id);
-        if (empty($this->upp_id)) {
-            Log::warning('Ignored empty UPP filter payload', ['payload' => $upp_id]);
-            return;
+        $normalizedUppIds = $this->normalizeUppIds($upp_id);
+
+        // Guard against stale localStorage IDs: keep only active UPP IDs from current options.
+        $validUppIds = collect($this->upp_options)
+            ->pluck('id')
+            ->map(fn($id) => (int) $id)
+            ->filter(fn($id) => $id > 0)
+            ->values()
+            ->all();
+
+        if (!empty($normalizedUppIds)) {
+            $normalizedUppIds = array_values(array_intersect($normalizedUppIds, $validUppIds));
+        }
+
+        $this->upp_id = $normalizedUppIds;
+
+        if (!empty($upp_id) && empty($this->upp_id)) {
+            Log::warning('UPP filter payload is invalid for current scope; falling back to all UPP', ['payload' => $upp_id]);
         }
 
         Log::info('Applying analytics UPP filter', ['upp_ids' => $this->upp_id]);
@@ -1262,11 +1516,547 @@ class Panel extends Component
             'f03_data' => $this->f03_data,
             'ipp_labels' => $this->ipp_labels,
             'ipp_data' => $this->ipp_data,
+            'aspek_ids' => $this->aspek_ids,
             'aspek_labels' => $this->aspek_labels,
             'aspek_values' => $this->aspek_values,
+            'f03_aspek_ids' => $this->f03_aspek_ids,
+            'f03_aspek_labels' => $this->f03_aspek_labels,
+            'f03_aspek_values' => $this->f03_aspek_values,
             'summary_cards' => $this->summary_cards,
             'summary_card_details' => $this->summary_card_details,
         ]);
+    }
+
+    /**
+     * Get UPP distribution in score buckets (0-5) for selected aspek.
+     * Bucket is derived by rounding average skor aspek per UPP to nearest integer.
+     */
+    private function getAspekScoreDistribution(int $aspekId, int $periodeId): array
+    {
+        $bucketMethod = 'UPP belum submit dihitung skor 0, sedangkan yang sudah submit dibulatkan ke skor terdekat (0-5).';
+
+        if (empty($aspekId) || empty($periodeId)) {
+            return [
+                'aspek_id' => $aspekId,
+                'total_upp' => 0,
+                'bucket_method' => $bucketMethod,
+                'scores' => [],
+            ];
+        }
+
+        $scoreLabels = [
+            0 => 'Prioritas Pembinaan',
+            1 => 'Kurang',
+            2 => 'Cukup',
+            3 => 'Baik Dengan Catatan',
+            4 => 'Baik',
+            5 => 'Istimewa',
+        ];
+
+        $scoreColors = [
+            0 => '#A32D2D',
+            1 => '#C43E3E',
+            2 => '#D97706',
+            3 => '#EAB308',
+            4 => '#10B981',
+            5 => '#185FA5',
+        ];
+
+        $scoreBuckets = [];
+        foreach ([5, 4, 3, 2, 1, 0] as $score) {
+            $scoreBuckets[$score] = [
+                'skor' => $score,
+                'predikat' => $scoreLabels[$score],
+                'color' => $scoreColors[$score],
+                'upp_count' => 0,
+                'percentage' => 0.0,
+                'upp_rows' => [],
+            ];
+        }
+
+        $scopedUppIds = $this->getScopedUppIds();
+        if (empty($scopedUppIds)) {
+            return [
+                'aspek_id' => $aspekId,
+                'total_upp' => 0,
+                'bucket_method' => $bucketMethod,
+                'scores' => array_values($scoreBuckets),
+            ];
+        }
+
+        $labelByUppId = collect($this->upp_options)
+            ->pluck('label', 'id')
+            ->mapWithKeys(fn($label, $id) => [(int) $id => (string) $label]);
+
+        $uppNameById = DB::table('upps')
+            ->whereIn('id', $scopedUppIds)
+            ->pluck('nama', 'id')
+            ->mapWithKeys(fn($name, $id) => [(int) $id => (string) $name]);
+
+        $perUppRows = DB::table('f02_indikator_validasi as fiv')
+            ->join('f02_validasi as fv', 'fiv.f02_validasi_id', '=', 'fv.id')
+            ->join('f01_pengisian as fp', 'fv.f01_pengisian_id', '=', 'fp.id')
+            ->join('indikator as ind', 'fiv.indikator_id', '=', 'ind.id')
+            ->select(
+                'fp.upp_id',
+                DB::raw('AVG(COALESCE(fiv.nilai, 0)) as skor_aspek')
+            )
+            ->where('fp.is_latest_version', 1)
+            ->where('fv.status', '!=', 'draft')
+            ->where('ind.aspek_id', '=', $aspekId)
+            ->where('fv.periode_id', '=', $periodeId)
+            ->when(!empty($scopedUppIds), function ($query) use ($scopedUppIds) {
+                $query->whereIn('fp.upp_id', $scopedUppIds);
+            })
+            ->groupBy('fp.upp_id')
+            ->get();
+
+        $scoreByUpp = $perUppRows
+            ->mapWithKeys(function ($row) {
+                return [(int) $row->upp_id => round((float) ($row->skor_aspek ?? 0), 4)];
+            })
+            ->all();
+
+        foreach ($scopedUppIds as $uppId) {
+            $uppId = (int) $uppId;
+            $rawScore = (float) ($scoreByUpp[$uppId] ?? 0);
+            $bucketScore = (int) round($rawScore, 0, PHP_ROUND_HALF_UP);
+            $bucketScore = max(0, min(5, $bucketScore));
+
+            $uppLabel = $labelByUppId->get($uppId, strtoupper((string) ($uppNameById->get($uppId, 'UPP-' . $uppId))));
+
+            $scoreBuckets[$bucketScore]['upp_rows'][] = [
+                'upp_id' => $uppId,
+                'upp_label' => $uppLabel,
+                'skor_aspek_raw' => $rawScore,
+            ];
+        }
+
+        $totalUpp = count($scopedUppIds);
+
+        foreach ([5, 4, 3, 2, 1, 0] as $score) {
+            usort($scoreBuckets[$score]['upp_rows'], function ($left, $right) {
+                $scoreComparison = $right['skor_aspek_raw'] <=> $left['skor_aspek_raw'];
+                if ($scoreComparison !== 0) {
+                    return $scoreComparison;
+                }
+
+                return strcmp((string) $left['upp_label'], (string) $right['upp_label']);
+            });
+
+            $count = count($scoreBuckets[$score]['upp_rows']);
+            $scoreBuckets[$score]['upp_count'] = $count;
+            $scoreBuckets[$score]['percentage'] = $totalUpp > 0
+                ? round(($count / $totalUpp) * 100, 1)
+                : 0.0;
+        }
+
+        return [
+            'aspek_id' => $aspekId,
+            'total_upp' => $totalUpp,
+            'bucket_method' => $bucketMethod,
+            'scores' => array_values($scoreBuckets),
+        ];
+    }
+
+    /**
+     * Get score distribution for an indikator with narasi and UPP breakdown
+     * @param int $indikator_id
+     * @param int $aspek_id
+     * @param int $periode_id
+     * @return array
+     */
+    private function getIndikatorScoreDistribution(int $indikator_id, int $aspek_id, int $periode_id): array
+    {
+        try {
+            // Color palette untuk 6 skor (0-5)
+            $scoreColors = [
+                0 => '#A32D2D', // Red - Prioritas Pembinaan
+                1 => '#C43E3E', // Dark Red
+                2 => '#D97706', // Orange - Cukup
+                3 => '#EAB308', // Amber - Cukup Dengan Catatan
+                4 => '#10B981', // Green - Baik
+                5 => '#185FA5'  // Blue - Istimewa
+            ];
+
+            // Map predikat label per skor
+            $scorePredikat = [
+                0 => 'Prioritas Pembinaan',
+                1 => 'Kurang',
+                2 => 'Cukup',
+                3 => 'Baik Dengan Catatan',
+                4 => 'Baik',
+                5 => 'Istimewa'
+            ];
+
+            // Validate periode
+            if (empty($periode_id)) {
+                Log::warning('Empty periode_id in getIndikatorScoreDistribution');
+                return [
+                    'indikator_id' => $indikator_id,
+                    'aspek_id' => $aspek_id,
+                    'scores' => [],
+                    'total_upp' => 0,
+                    'colors' => $scoreColors,
+                    'chart_data' => ['labels' => [], 'data' => [], 'backgroundColor' => []]
+                ];
+            }
+
+            // Get F02 Skor narasi untuk semua score (0-5)
+            $f02Skor = DB::table('f02_skors')
+                ->where('indikator_id', $indikator_id)
+                ->where('periode_id', $periode_id)
+                ->first();
+
+            Log::info('F02Skor lookup', [
+                'indikator_id' => $indikator_id,
+                'periode_id' => $periode_id,
+                'found' => $f02Skor ? 'yes' : 'no'
+            ]);
+
+            // Get scoped UPP IDs (dari filter global)
+            $scopedUppIds = $this->getScopedUppIds();
+
+            Log::info('Scoped UPP IDs', [
+                'count' => count($scopedUppIds),
+                'ids' => $scopedUppIds
+            ]);
+
+            if (empty($scopedUppIds)) {
+                return [
+                    'indikator_id' => $indikator_id,
+                    'aspek_id' => $aspek_id,
+                    'scores' => [],
+                    'total_upp' => 0,
+                    'colors' => $scoreColors,
+                    'chart_data' => ['labels' => [], 'data' => [], 'backgroundColor' => []]
+                ];
+            }
+
+            $uppMetaById = DB::table('upps')
+                ->whereIn('id', $scopedUppIds)
+                ->select('id', 'kode', 'nama')
+                ->get()
+                ->keyBy('id');
+
+            // Ambil skor per UPP dari hasil validasi F02 (bukan self-assessment F01).
+            // Hanya validasi non-draft dan is_latest_version = 1 yang dihitung.
+            // UPP yang tidak memiliki baris di sini (belum submit / belum validasi)
+            // akan otomatis mendapat skor 0 via fallback `?? 0` di loop di bawah.
+            $scoreByUpp = [];
+            if (!empty($scopedUppIds)) {
+                // Subquery: ambil f02_validasi_id terbaru per UPP untuk periode ini.
+                // Tujuannya agar kalau ada lebih dari satu baris validasi per UPP
+                // (misalnya karena revisi), hanya yang paling terakhir dipakai.
+                $latestValidasiPerUpp = DB::table('f02_validasi as fv')
+                    ->join('f01_pengisian as fp', 'fv.f01_pengisian_id', '=', 'fp.id')
+                    ->select('fp.upp_id', DB::raw('MAX(fv.id) as latest_f02_validasi_id'))
+                    ->where('fp.is_latest_version', 1)
+                    ->where('fv.status', '!=', 'draft')
+                    ->where('fv.periode_id', $periode_id)
+                    ->whereIn('fp.upp_id', $scopedUppIds)
+                    ->groupBy('fp.upp_id')
+                    ->get()
+                    ->keyBy('upp_id');
+
+                $latestValidasiIds = $latestValidasiPerUpp
+                    ->pluck('latest_f02_validasi_id')
+                    ->map(fn($id) => (int) $id)
+                    ->values()
+                    ->all();
+
+                if (!empty($latestValidasiIds)) {
+                    $nilaiRows = DB::table('f02_indikator_validasi as fiv')
+                        ->join('f02_validasi as fv', 'fiv.f02_validasi_id', '=', 'fv.id')
+                        ->join('f01_pengisian as fp', 'fv.f01_pengisian_id', '=', 'fp.id')
+                        ->selectRaw('fp.upp_id, CAST(fiv.nilai AS UNSIGNED) as skor')
+                        ->whereIn('fiv.f02_validasi_id', $latestValidasiIds)
+                        ->where('fiv.indikator_id', $indikator_id)
+                        ->get();
+
+                    foreach ($nilaiRows as $row) {
+                        $uppId = (int) ($row->upp_id ?? 0);
+                        $skor  = max(0, min(5, (int) ($row->skor ?? 0)));
+                        if ($uppId > 0) {
+                            $scoreByUpp[$uppId] = $skor;
+                        }
+                    }
+                }
+            }
+
+            // Include all UPP in current scope; missing/unsent data is forced to score 0.
+            $totalUpp = count($scopedUppIds);
+
+            Log::info('Total UPP count', [
+                'indikator_id' => $indikator_id,
+                'total_upp' => $totalUpp
+            ]);
+
+            // Build scores array dengan narasi dan UPP list
+            $scores = [];
+            $chartLabels = [];
+            $chartData = [];
+            $chartColors = [];
+            $uppByScore = [
+                5 => [],
+                4 => [],
+                3 => [],
+                2 => [],
+                1 => [],
+                0 => [],
+            ];
+
+            $labelByUppId = collect($this->upp_options)->pluck('label', 'id');
+
+            foreach ($scopedUppIds as $uppId) {
+                $uppId = (int) $uppId;
+                $skor = (int) ($scoreByUpp[$uppId] ?? 0);
+
+                $uppMeta = $uppMetaById->get($uppId);
+                $uppByScore[$skor][] = (object) [
+                    'upp_id' => $uppId,
+                    'upp_nama' => $labelByUppId->get($uppId, strtoupper((string) ($uppMeta->nama ?? ('UPP-' . $uppId)))),
+                    'upp_kode' => (string) ($uppMeta->kode ?? ''),
+                ];
+            }
+
+            foreach ([5, 4, 3, 2, 1, 0] as $skor) {
+                $uppList = $uppByScore[$skor] ?? [];
+                usort($uppList, function ($left, $right) {
+                    return strcmp((string) ($left->upp_nama ?? ''), (string) ($right->upp_nama ?? ''));
+                });
+
+                $count = count($uppList);
+                $percentage = $totalUpp > 0 ? ($count / $totalUpp) * 100 : 0;
+
+                // Get narasi dari F02Skor
+                $narasiField = 'skor_' . $skor;
+                $narasi = $f02Skor?->{$narasiField} ?? '';
+
+                Log::info("Score {$skor} processing", [
+                    'upp_count' => $count,
+                    'narasi' => substr($narasi, 0, 50),
+                    'upp_list_count' => count($uppList)
+                ]);
+
+                $scores[] = [
+                    'skor' => $skor,
+                    'narasi' => $narasi,
+                    'predikat' => $scorePredikat[$skor] ?? 'Tidak Diketahui',
+                    'upp_count' => $count,
+                    'percentage' => round($percentage, 1),
+                    'upp_list' => $uppList,
+                    'color' => $scoreColors[$skor]
+                ];
+
+                if ($count > 0) {
+                    $chartLabels[] = $scorePredikat[$skor];
+                    $chartData[] = $count;
+                    $chartColors[] = $scoreColors[$skor];
+                }
+            }
+
+            Log::info('Final scores array', [
+                'indikator_id' => $indikator_id,
+                'scores_count' => count($scores),
+                'chart_labels_count' => count($chartLabels),
+                'chart_data_count' => count($chartData),
+                'chart_labels' => $chartLabels,
+                'chart_data' => $chartData,
+                'chart_colors' => $chartColors,
+                'total_upp' => $totalUpp
+            ]);
+
+            return [
+                'indikator_id' => $indikator_id,
+                'aspek_id' => $aspek_id,
+                'scores' => $scores,
+                'total_upp' => $totalUpp,
+                'colors' => $scoreColors,
+                'chart_data' => [
+                    'labels' => $chartLabels,
+                    'data' => $chartData,
+                    'backgroundColor' => $chartColors
+                ]
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('Error in getIndikatorScoreDistribution', ['error' => $e->getMessage()]);
+            return [
+                'indikator_id' => $indikator_id,
+                'aspek_id' => $aspek_id,
+                'scores' => [],
+                'total_upp' => 0,
+                'colors' => [
+                    0 => '#A32D2D',
+                    1 => '#C43E3E',
+                    2 => '#D97706',
+                    3 => '#EAB308',
+                    4 => '#10B981',
+                    5 => '#185FA5',
+                ],
+                'chart_data' => ['labels' => [], 'data' => [], 'backgroundColor' => []]
+            ];
+        }
+    }
+
+    /**
+     * Show indicator detail modal
+     */
+    public function showIndikatorDetail($indikator_id)
+    {
+        try {
+            $indikator_id = (int) $indikator_id;
+
+            // Get indikator info
+            $indikator = DB::table('indikator')
+                ->where('id', $indikator_id)
+                ->first(['id', 'nama', 'kode', 'aspek_id']);
+
+            if (!$indikator) {
+                Log::warning('Indikator not found', ['indikator_id' => $indikator_id]);
+                return;
+            }
+
+            // Validate periode_id - if not set, get active periode
+            $periodeId = (int) $this->periode_id;
+            if (empty($periodeId)) {
+                $activePeriode = DB::table('periode')->where('is_aktif', 1)->orderByDesc('tahun')->first(['id']);
+                $periodeId = $activePeriode?->id ?? null;
+
+                if (!$periodeId) {
+                    Log::warning('No active periode found');
+                    return;
+                }
+            }
+
+            Log::info('showIndikatorDetail', [
+                'indikator_id' => $indikator_id,
+                'periode_id' => $periodeId,
+                'upp_filter' => $this->upp_id,
+                'scoped_upp_ids' => $this->getScopedUppIds()
+            ]);
+
+            // Get distribution data
+            $distribution = $this->getIndikatorScoreDistribution(
+                $indikator_id,
+                (int) $indikator->aspek_id,
+                $periodeId
+            );
+
+            // Get aspek info
+            $aspek = DB::table('aspek')
+                ->where('id', (int) $indikator->aspek_id)
+                ->first(['id', 'nama']);
+
+            $this->indicator_detail = [
+                'indikator' => [
+                    'id' => $indikator->id,
+                    'nama' => $indikator->nama,
+                    'kode' => $indikator->kode
+                ],
+                'aspek' => [
+                    'id' => $aspek->id,
+                    'nama' => $aspek->nama
+                ],
+                'distribution' => $distribution,
+                'periode_id' => $this->periode_id
+            ];
+
+            $this->indicator_detail_visible = true;
+            $this->selected_score_for_upp = null;
+
+            // Dispatch to initialize chart after render
+            $this->dispatch('initChart');
+
+        } catch (\Exception $e) {
+            Log::error('Error showing indicator detail', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Select score to show UPP list
+     */
+    public function selectScoreForUpp($skor)
+    {
+        $this->selected_score_for_upp = (int) $skor;
+    }
+
+    /**
+     * Close indicator detail modal
+     */
+    public function closeIndicatorDetail()
+    {
+        $this->indicator_detail = null;
+        $this->indicator_detail_visible = false;
+        $this->selected_score_for_upp = null;
+    }
+
+    /**
+     * Show aspek detail modal with UPP distribution for score 0-5.
+     */
+    public function showAspekDetail($aspekId)
+    {
+        try {
+            $aspekId = (int) $aspekId;
+
+            if ($aspekId <= 0) {
+                return;
+            }
+
+            $aspek = DB::table('aspek')
+                ->where('id', $aspekId)
+                ->first(['id', 'nama', 'bobot']);
+
+            if (!$aspek) {
+                Log::warning('Aspek not found for detail modal', ['aspek_id' => $aspekId]);
+                return;
+            }
+
+            $periodeId = (int) $this->periode_id;
+            if (empty($periodeId)) {
+                $activePeriode = DB::table('periode')
+                    ->where('is_aktif', 1)
+                    ->orderByDesc('tahun')
+                    ->first(['id']);
+
+                $periodeId = $activePeriode?->id ?? null;
+            }
+
+            if (empty($periodeId)) {
+                Log::warning('No active periode available for aspek detail modal', ['aspek_id' => $aspekId]);
+                return;
+            }
+
+            $distribution = $this->getAspekScoreDistribution($aspekId, (int) $periodeId);
+
+            $this->aspek_detail = [
+                'aspek' => [
+                    'id' => (int) $aspek->id,
+                    'nama' => (string) $aspek->nama,
+                    'bobot' => (float) ($aspek->bobot ?? 0),
+                ],
+                'distribution' => $distribution,
+                'periode_id' => (int) $periodeId,
+            ];
+
+            $this->aspek_detail_visible = true;
+            $this->selectAspek($aspekId);
+        } catch (\Exception $e) {
+            Log::error('Error showing aspek detail', [
+                'aspek_id' => $aspekId,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Close aspek detail modal.
+     */
+    public function closeAspekDetail()
+    {
+        $this->aspek_detail = null;
+        $this->aspek_detail_visible = false;
     }
 
     public function selectAspek($aspekId)
@@ -1282,10 +2072,20 @@ class Panel extends Component
     public function render()
     {
         return view('livewire.analytics.panel', [
+            'aspek_ids' => $this->aspek_ids,
+            'f03_aspek_ids' => $this->f03_aspek_ids,
             'f02_labels' => $this->f02_labels,
             'f02_data' => $this->f02_data,
             'f03_labels' => $this->f03_labels,
             'f03_data' => $this->f03_data,
+            'f03_indikator_ids' => $this->f03_indikator_ids,
+            'f03_indikator_labels' => $this->f03_indikator_labels,
+            'f03_indikator_values' => $this->f03_indikator_values,
+            'f03_indikator_ids' => $this->f03_indikator_ids,
+            'f03_indikator_labels' => $this->f03_indikator_labels,
+            'f03_indikator_values' => $this->f03_indikator_values,
+            'f03_aspek_labels' => $this->f03_aspek_labels,
+            'f03_aspek_values' => $this->f03_aspek_values,
             'ipp_labels' => $this->ipp_labels,
             'ipp_data' => $this->ipp_data,
             'aspek_chart_data' => $this->aspek_chart_data,
@@ -1299,6 +2099,11 @@ class Panel extends Component
             'summary_card_details' => $this->summary_card_details,
             'periode_options' => $this->periode_options,
             'upp_options' => $this->upp_options,
+            'indicator_detail' => $this->indicator_detail,
+            'indicator_detail_visible' => $this->indicator_detail_visible,
+            'selected_score_for_upp' => $this->selected_score_for_upp,
+            'aspek_detail' => $this->aspek_detail,
+            'aspek_detail_visible' => $this->aspek_detail_visible,
         ]);
     }
 }

@@ -31,7 +31,19 @@ class F01AspekController extends Controller
 
     public function index(Request $request)
     {
+        $periodes = Periode::orderBy('tahun', 'desc')->orderBy('nama', 'asc')->get();
+
+        // Default ke periode aktif jika tidak ada filter dari request
+        $periodeAktif = Periode::where('is_aktif', 1)->first();
+        $selectedPeriodeId = $request->filled('periode_id')
+            ? $request->input('periode_id')
+            : ($periodeAktif ? $periodeAktif->id : null);
+
         $query = Aspek::with('periode')->withCount('indikator');
+
+        if ($selectedPeriodeId) {
+            $query->where('periode_id', $selectedPeriodeId);
+        }
 
         // Apply multi-column sorting (up to 3 levels)
         for ($i = 1; $i <= 3; $i++) {
@@ -48,10 +60,9 @@ class F01AspekController extends Controller
             $query->orderBy('kode', 'asc');
         }
 
-        $aspeks = $query->paginate(50);
-        $periodes = Periode::orderBy('tahun', 'desc')->orderBy('nama', 'asc')->get();
+        $aspeks = $query->paginate(50)->withQueryString();
         $locked = $this->structureLocked();
-        return view('f01.aspek.index', compact('aspeks', 'periodes', 'locked'));
+        return view('f01.aspek.index', compact('aspeks', 'periodes', 'locked', 'selectedPeriodeId'));
     }
 
     public function store(StoreAspekRequest $request)

@@ -526,7 +526,7 @@
         <td>{{ $pengisian->created_at->format('d M Y H:i') }} WIB</td>
         <td style="text-align: center;">
           <div style="display: flex; gap: 6px; justify-content: center; align-items: center;">
-            <a href="{{ route('f02.show', $pengisian->id) }}" class="f02-action-button">Validasi</a>
+            <a href="{{ route('f02.init-validasi', $pengisian->id) }}" class="f02-action-button">Validasi</a>
             @if($pengisian->f02_status === 'selesai')
             <button onclick="allowResubmitSingle({{ $pengisian->f02_id }})" class="f02-btn f02-btn-resubmit" style="padding: 8px 12px; font-size: 12px; white-space: nowrap;">
               🔄 Ulang

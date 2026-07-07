@@ -158,9 +158,9 @@ class F02ValidasiController extends Controller
     }
 
     /**
-     * Show validasi form untuk satu pengisian F01 - redirect ke aspek-list
+     * Inisiasi validasi form untuk satu pengisian F01 - redirect ke aspek-list
      */
-    public function show(Request $request, $id)
+    public function initValidasi(Request $request, $id)
     {
         $pengisian = F01Pengisian::findOrFail($id);
         
@@ -201,12 +201,25 @@ class F02ValidasiController extends Controller
             ->keyBy('indikator_id');
         
         // Build aspek data dengan progress
-        $aspeksData = $aspeks->map(function($aspek) use ($f02IndikatorValidasi) {
+        $aspeksData = $aspeks->map(function($aspek) use ($f02IndikatorValidasi, $pengisian) {
             $indicatorsList = $aspek->indikator;
             $filledCount = 0;
             $skorMentah = 0;
+            $changedCount = 0;
+            
+            $changedIndikators = [];
+            if ($pengisian->version_number > 1) {
+                $changedIndikators = \App\Models\F01IndikatorNilai::where('f01_pengisian_id', $pengisian->id)
+                    ->where('is_changed', true)
+                    ->pluck('indikator_id')
+                    ->toArray();
+            }
             
             foreach ($indicatorsList as $ind) {
+                if (in_array($ind->id, $changedIndikators)) {
+                    $changedCount++;
+                }
+
                 if (isset($f02IndikatorValidasi[$ind->id])) {
                     $nilaiObj = $f02IndikatorValidasi[$ind->id];
                     if (!is_null($nilaiObj->nilai)) {
@@ -225,6 +238,7 @@ class F02ValidasiController extends Controller
                 'filled_indikators' => $filledCount,
                 'progress' => $progress,
                 'skor_mentah' => round($skorMentah, 2),
+                'changed_count' => $changedCount,
             ];
         });
         
@@ -290,6 +304,25 @@ class F02ValidasiController extends Controller
         $buktiDukung = F01BuktiDukung::where('f01_pengisian_id', $pengisian->id)
             ->where('indikator_id', $indikatorId)
             ->get();
+            
+        // Get status for all indikators in this aspek
+        $indikatorStatuses = [];
+        if ($pengisian->version_number > 1) {
+            $f01NilaiList = \App\Models\F01IndikatorNilai::where('f01_pengisian_id', $pengisian->id)
+                ->whereIn('indikator_id', $indikators->pluck('id'))
+                ->get()->keyBy('indikator_id');
+                
+            $f02ValidasiList = \App\Models\F02IndikatorValidasi::where('f02_validasi_id', $validasiId)
+                ->whereIn('indikator_id', $indikators->pluck('id'))
+                ->get()->keyBy('indikator_id');
+                
+            foreach ($indikators as $ind) {
+                $indikatorStatuses[$ind->id] = [
+                    'is_changed' => isset($f01NilaiList[$ind->id]) ? $f01NilaiList[$ind->id]->is_changed : false,
+                    'is_carried_over' => isset($f02ValidasiList[$ind->id]) ? $f02ValidasiList[$ind->id]->is_carried_over : false,
+                ];
+            }
+        }
         
         return view('f02.validasi-detail', [
             'validasi' => $validasi,
@@ -300,6 +333,8 @@ class F02ValidasiController extends Controller
             'skors' => $skors,
             'indikatorValidasi' => $indikatorValidasi,
             'buktiDukung' => $buktiDukung,
+            'indikatorStatuses' => $indikatorStatuses,
+            'isResubmit' => $pengisian->version_number > 1,
         ]);
     }
 

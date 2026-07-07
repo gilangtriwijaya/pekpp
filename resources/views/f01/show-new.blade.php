@@ -613,6 +613,10 @@
 
         {{-- Indikator Tab Contents - Main Grid Layout --}}
         @foreach($selectedAspek->indikator as $idx => $indikator)
+            @php
+                $isLocked = $isResubmit && !($isChangedMap[$indikator->id] ?? false);
+                $inputDisabled = $isReadOnly || $isLocked;
+            @endphp
             <div class="f01-tab-content-main {{ $idx === 0 ? 'block' : 'hidden' }}" data-indikator-idx="{{ $idx }}">
                 <div class="f01-tab-content-wrapper">
                     {{-- LEFT COLUMN (65%) - Form --}}
@@ -653,14 +657,14 @@
                                                        class="f01-form-input"
                                                        name="jawaban_{{ $pertanyaan->id }}"
                                                        value="{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}"
-                                                       {{ $isReadOnly ? 'disabled' : '' }}
+                                                       {{ $inputDisabled ? 'disabled' : '' }}
                                                        placeholder="Masukkan jawaban">
                                                 @break
 
                                             @case('textarea')
                                                 <textarea class="f01-form-textarea"
                                                           name="jawaban_{{ $pertanyaan->id }}"
-                                                          {{ $isReadOnly ? 'disabled' : '' }}
+                                                          {{ $inputDisabled ? 'disabled' : '' }}
                                                           placeholder="Masukkan jawaban">{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}</textarea>
                                                 @break
 
@@ -671,7 +675,7 @@
                                                                name="jawaban_{{ $pertanyaan->id }}" 
                                                                value="Ya"
                                                                {{ $savedAnswer === 'Ya' || $savedAnswer === '"Ya"' ? 'checked' : '' }}
-                                                               {{ $isReadOnly ? 'disabled' : '' }}>
+                                                               {{ $inputDisabled ? 'disabled' : '' }}>
                                                         <span>Ya</span>
                                                     </label>
                                                     <label class="f01-option">
@@ -679,16 +683,35 @@
                                                                name="jawaban_{{ $pertanyaan->id }}" 
                                                                value="Tidak"
                                                                {{ $savedAnswer === 'Tidak' || $savedAnswer === '"Tidak"' ? 'checked' : '' }}
-                                                               {{ $isReadOnly ? 'disabled' : '' }}>
+                                                               {{ $inputDisabled ? 'disabled' : '' }}>
                                                         <span>Tidak</span>
                                                     </label>
+                                                </div>
+                                                @break
+
+                                            @case('radio')
+                                                <div class="f01-radio-group" style="flex-direction: column; gap: 12px;">
+                                                    @php
+                                                    $optionsRaw = $pertanyaan->opsi_jawaban ?? [];
+                                                    $options = is_array($optionsRaw) ? $optionsRaw : json_decode($optionsRaw, true) ?? [];
+                                                    @endphp
+                                                    @foreach($options as $option)
+                                                        <label class="f01-option">
+                                                            <input type="radio" 
+                                                                   name="jawaban_{{ $pertanyaan->id }}" 
+                                                                   value="{{ $option['value'] ?? $option }}"
+                                                                   {{ $savedAnswer === ($option['value'] ?? $option) || $savedAnswer === json_encode($option['value'] ?? $option) ? 'checked' : '' }}
+                                                                   {{ $inputDisabled ? 'disabled' : '' }}>
+                                                            <span>{{ $option['label'] ?? $option }}</span>
+                                                        </label>
+                                                    @endforeach
                                                 </div>
                                                 @break
 
                                             @case('select')
                                                 <select class="f01-form-select"
                                                         name="jawaban_{{ $pertanyaan->id }}"
-                                                        {{ $isReadOnly ? 'disabled' : '' }}>
+                                                        {{ $inputDisabled ? 'disabled' : '' }}>
                                                     <option value="">-- Pilih --</option>
                                                     @php
                                                     $optionsRaw = $pertanyaan->opsi_jawaban ?? [];
@@ -710,7 +733,7 @@
                                                        value="{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}"
                                                        min="{{ $pertanyaan->min ?? 0 }}"
                                                        max="{{ $pertanyaan->max ?? 999999 }}"
-                                                       {{ $isReadOnly ? 'disabled' : '' }}
+                                                       {{ $inputDisabled ? 'disabled' : '' }}
                                                        placeholder="Masukkan angka">
                                                 @break
 
@@ -729,7 +752,7 @@
                                                                    name="jawaban_{{ $pertanyaan->id }}[]"
                                                                    value="{{ $option['value'] ?? $option }}"
                                                                    {{ in_array($option['value'] ?? $option, $savedValues) ? 'checked' : '' }}
-                                                                   {{ $isReadOnly ? 'disabled' : '' }}>
+                                                                   {{ $inputDisabled ? 'disabled' : '' }}>
                                                             <span>{{ $option['label'] ?? $option }}</span>
                                                         </label>
                                                     @endforeach
@@ -744,7 +767,7 @@
                                                                data-question-id="{{ $pertanyaan->id }}"
                                                                value="__lainnya__"
                                                                {{ $hasLainnya ? 'checked' : '' }}
-                                                               {{ $isReadOnly ? 'disabled' : '' }}>
+                                                               {{ $inputDisabled ? 'disabled' : '' }}>
                                                         <span>Lainnya</span>
                                                     </label>
                                                     
@@ -757,7 +780,7 @@
                                                                class="f01-form-input f01-lainnya-input"
                                                                placeholder="Tuliskan jawaban lainnya..."
                                                                value="{{ $lainnyaValue }}"
-                                                               {{ $isReadOnly ? 'disabled' : '' }}>
+                                                               {{ $inputDisabled ? 'disabled' : '' }}>
                                                         <small style="color: #888; display: block; margin-top: 4px;">Silakan tuliskan pilihan Anda yang lain</small>
                                                     </div>
                                                     @endif
@@ -769,7 +792,7 @@
                                                        class="f01-form-input"
                                                        name="jawaban_{{ $pertanyaan->id }}"
                                                        value="{{ is_array($savedAnswer) ? json_encode($savedAnswer) : $savedAnswer }}"
-                                                       {{ $isReadOnly ? 'disabled' : '' }}
+                                                       {{ $inputDisabled ? 'disabled' : '' }}
                                                        placeholder="Masukkan jawaban">
                                                 @break
                                         @endswitch
@@ -793,7 +816,7 @@
                                            class="f01-bukti-input"
                                            name="bukti_dukung_url_{{ $indikator->id }}"
                                            value="{{ $savedUrl }}"
-                                           {{ $isReadOnly ? 'disabled' : '' }}
+                                           {{ $inputDisabled ? 'disabled' : '' }}
                                            placeholder="Masukkan link dokumen atau file yang mendukung jawaban indikator ini">
                                     
                                     {{-- Persyaratan Bukti Dukung (moved from right column for better UX) --}}
@@ -815,13 +838,28 @@
                                 </div>
                             </form>
 
-                            {{-- Save Button --}}
+                            {{-- Save & Ubah Buttons --}}
                             @if(!$isReadOnly)
-                                <div class="f01-actions">
-                                    <button class="f01-btn f01-btn-primary"
-                                            onclick="saveProgress()">
-                                        💾 Simpan Progress
-                                    </button>
+                                <div class="f01-actions" id="f01-actions-{{ $indikator->id }}">
+                                    @if($isLocked)
+                                        <div class="f01-locked-banner" id="banner-locked-{{ $indikator->id }}" style="background: #FFF3CD; color: #856404; padding: 12px; border-radius: 6px; border: 1px solid #FFEEBA; margin-bottom: 12px; width: 100%;">
+                                            🔒 Jawaban terkunci (dari versi sebelumnya).
+                                        </div>
+                                        <button type="button" class="f01-btn f01-btn-warning btn-ubah-indikator" id="btn-ubah-{{ $indikator->id }}"
+                                                onclick="confirmUbahIndikator({{ $pengisian->id }}, {{ $indikator->id }})"
+                                                style="background: #ffc107; color: #212529;">
+                                            Ubah Jawaban Indikator Ini
+                                        </button>
+                                        <button type="button" class="f01-btn f01-btn-primary btn-simpan-indikator" id="btn-simpan-{{ $indikator->id }}"
+                                                onclick="saveProgress()" style="display: none;">
+                                            💾 Simpan Progress
+                                        </button>
+                                    @else
+                                        <button type="button" class="f01-btn f01-btn-primary btn-simpan-indikator"
+                                                onclick="saveProgress()">
+                                            💾 Simpan Progress
+                                        </button>
+                                    @endif
                                 </div>
                             @endif
                         </div>
@@ -1261,5 +1299,54 @@ document.addEventListener('input', function(e) {
         }, 2000);
     }
 });
+// Konfirmasi Ubah Indikator
+function confirmUbahIndikator(pengisianId, indikatorId) {
+    if (confirm('Indikator ini akan ditandai sebagai berubah dan validator perlu menilai ulang bagian ini. Jawaban Anda di versi sebelumnya tetap tersimpan. Lanjutkan?')) {
+        const url = "{{ route('f01.indikator.mark-changed', ['pengisianId' => 'PENGISIAN_ID', 'indikatorId' => 'INDIKATOR_ID']) }}"
+            .replace('PENGISIAN_ID', pengisianId)
+            .replace('INDIKATOR_ID', indikatorId);
+        
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                // DOM manipulation to unlock inputs without full page reload
+                const form = document.getElementById(`form-indikator-${indikatorId}`);
+                if (form) {
+                    form.querySelectorAll('input, select, textarea').forEach(el => {
+                        el.removeAttribute('disabled');
+                    });
+                }
+                
+                // Hide banner and Ubah button, show Simpan button
+                const banner = document.getElementById(`banner-locked-${indikatorId}`);
+                if (banner) banner.style.display = 'none';
+                
+                const btnUbah = document.getElementById(`btn-ubah-${indikatorId}`);
+                if (btnUbah) btnUbah.style.display = 'none';
+                
+                const btnSimpan = document.getElementById(`btn-simpan-${indikatorId}`);
+                if (btnSimpan) btnSimpan.style.display = 'inline-flex';
+                
+                // Show success indicator temporarily
+                showAutosaveIndicator('✓ Mode Edit Aktif', 'saved');
+                setTimeout(() => hideAutosaveIndicator(), 3000);
+            } else {
+                alert('Gagal: ' + (data.message || 'Error tidak diketahui'));
+            }
+        })
+        .catch(err => {
+            console.error('Error:', err);
+            alert('Terjadi kesalahan jaringan.');
+        });
+    }
+}
 </script>
 @endsection

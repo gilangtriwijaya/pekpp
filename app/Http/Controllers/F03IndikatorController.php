@@ -24,8 +24,20 @@ class F03IndikatorController extends Controller
 
     public function index(Request $request)
     {
+        $periodes = Periode::orderBy('tahun', 'desc')->orderBy('nama', 'asc')->get();
+
+        // Default ke periode aktif jika tidak ada filter dari request
+        $periodeAktif = Periode::where('is_aktif', 1)->first();
+        $selectedPeriodeId = $request->filled('periode_id')
+            ? $request->input('periode_id')
+            : ($periodeAktif ? $periodeAktif->id : null);
+
         $aspekId = $request->query('aspek_id');
         $query = F03Indikator::with(['aspek', 'periode']);
+
+        if ($selectedPeriodeId) {
+            $query->where('periode_id', $selectedPeriodeId);
+        }
 
         if ($aspekId) {
             $query->where('f03_aspek_id', $aspekId);
@@ -44,10 +56,15 @@ class F03IndikatorController extends Controller
             $query->orderBy('urutan', 'asc');
         }
 
-        $indikators = $query->paginate(50);
-        $aspeks = F03Aspek::with('periode')->get();
+        $indikators = $query->paginate(50)->withQueryString();
         
-        return view('f03.indikator.index', compact('indikators', 'aspeks'));
+        $aspeksQuery = F03Aspek::orderBy('urutan', 'asc');
+        if ($selectedPeriodeId) {
+            $aspeksQuery->where('periode_id', $selectedPeriodeId);
+        }
+        $aspeks = $aspeksQuery->get();
+        
+        return view('f03.indikator.index', compact('indikators', 'aspeks', 'periodes', 'selectedPeriodeId'));
     }
 
     public function store(Request $request)
