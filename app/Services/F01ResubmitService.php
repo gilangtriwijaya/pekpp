@@ -194,29 +194,32 @@ class F01ResubmitService
             $previousF02 = $this->getPreviousF02Data($f01);
             
             if ($previousF02) {
-                // Get all indikators that are NOT changed
-                $unchangedIndikators = \App\Models\F01IndikatorNilai::where('f01_pengisian_id', $f01->id)
-                    ->where('is_changed', false)
-                    ->pluck('indikator_id');
+                // Get all indikator changes status for this F01
+                $f01Indikators = \App\Models\F01IndikatorNilai::where('f01_pengisian_id', $f01->id)
+                    ->get()
+                    ->keyBy('indikator_id');
 
-                if ($unchangedIndikators->isNotEmpty()) {
-                    // Get previous validasi scores for these indikators
-                    $previousScores = \App\Models\F02IndikatorValidasi::where('f02_validasi_id', $previousF02->id)
-                        ->whereIn('indikator_id', $unchangedIndikators)
-                        ->get();
+                // Get ALL previous validasi scores
+                $previousScores = \App\Models\F02IndikatorValidasi::where('f02_validasi_id', $previousF02->id)->get();
 
-                    foreach ($previousScores as $prevScore) {
-                        // Insert to new F02, avoiding duplicates just in case
-                        \App\Models\F02IndikatorValidasi::firstOrCreate([
-                            'f02_validasi_id' => $f02->id,
-                            'indikator_id' => $prevScore->indikator_id,
-                        ], [
-                            'nilai' => $prevScore->nilai,
-                            'catatan' => $prevScore->catatan,
-                            'status' => $prevScore->status,
-                            'is_carried_over' => true,
-                        ]);
+                foreach ($previousScores as $prevScore) {
+                    $indId = $prevScore->indikator_id;
+                    $isChanged = false;
+                    
+                    if (isset($f01Indikators[$indId])) {
+                        $isChanged = $f01Indikators[$indId]->is_changed;
                     }
+
+                    // Insert to new F02, avoiding duplicates just in case
+                    \App\Models\F02IndikatorValidasi::firstOrCreate([
+                        'f02_validasi_id' => $f02->id,
+                        'indikator_id' => $indId,
+                    ], [
+                        'nilai' => $isChanged ? null : $prevScore->nilai, // Reset score if changed
+                        'catatan' => $prevScore->catatan, // ALWAYS keep previous notes
+                        'status' => $isChanged ? 'draft' : $prevScore->status,
+                        'is_carried_over' => !$isChanged,
+                    ]);
                 }
             }
 
