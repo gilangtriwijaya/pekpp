@@ -341,7 +341,7 @@ class F03DashboardController extends Controller
      */
     public function getResponseDetail($pengisianId)
     {
-        $pengisian = F03Pengisian::with(['jawaban.indikator.aspek', 'token.upp', 'token.periode'])->findOrFail($pengisianId);
+        $pengisian = F03Pengisian::with(['jawaban.indikator.aspek', 'token.upp', 'token.periode', 'demographic'])->findOrFail($pengisianId);
 
         return response()->json([
             'pengisian' => $pengisian,

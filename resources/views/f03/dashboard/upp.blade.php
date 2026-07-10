@@ -344,7 +344,7 @@
         }, 2000);
     }
 
-    function viewDetail(responseId) {
+    window.viewDetail = function(responseId) {
         fetch(`{{ url('/f03/api/response') }}/${responseId}`, {
             headers: {
                 'Accept': 'application/json',
@@ -358,11 +358,42 @@
             return res.json();
         })
         .then(data => {
+            let gender = data.pengisian.demographic?.gender;
+            if (gender) {
+                const g = gender.toLowerCase();
+                if (g === 'l' || g === 'm' || g === 'laki-laki' || g === 'male' || g === 'pria') {
+                    gender = 'Pria';
+                } else if (g === 'p' || g === 'f' || g === 'perempuan' || g === 'female' || g === 'wanita') {
+                    gender = 'Wanita';
+                }
+            } else {
+                gender = '-';
+            }
+
             let html = `
                 <div style="max-height: 600px; overflow-y: auto; padding: 20px;">
                     <h3 style="margin-bottom: 20px; color: #1F2937; font-size: 18px; font-weight: 700;">Detail Respons</h3>
+                    
+                    <div style="background: #F9FAFB; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #E5E7EB;">
+                        <h4 style="margin: 0 0 10px 0; color: #374151; font-size: 14px; font-weight: 600;">Data Diri Responden</h4>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div style="font-size: 13px; color: #4B5563;">
+                                <strong>Jenis Kelamin:</strong> ${gender}
+                            </div>
+                            <div style="font-size: 13px; color: #4B5563;">
+                                <strong>Umur:</strong> ${data.pengisian.demographic?.age ? data.pengisian.demographic.age + ' Tahun' : '-'}
+                            </div>
+                            <div style="font-size: 13px; color: #4B5563;">
+                                <strong>Pendidikan Terakhir:</strong> ${data.pengisian.demographic?.last_education || '-'}
+                            </div>
+                            <div style="font-size: 13px; color: #4B5563;">
+                                <strong>Pekerjaan Utama:</strong> ${data.pengisian.demographic?.occupation || '-'}
+                            </div>
+                        </div>
+                    </div>
+
                     <p style="color: #6B7280; font-size: 13px; margin-bottom: 20px;">
-                        <strong>Tanggal:</strong> ${new Date(data.pengisian.response_date).toLocaleString('id-ID')}
+                        <strong>Tanggal Pengisian:</strong> ${new Date(data.pengisian.response_date).toLocaleString('id-ID')}
                     </p>
                     <table style="width: 100%; border-collapse: collapse;">
                         <thead>
@@ -398,7 +429,7 @@
                 <div style="background: white; border-radius: 8px; width: 90%; max-width: 900px; box-shadow: 0 10px 25px rgba(0,0,0,0.2);">
                     <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1px solid #E5E7EB;">
                         <h2 style="margin: 0; color: #1F2937; font-size: 18px; font-weight: 700;">Detail Respons</h2>
-                        <button onclick="this.closest('[style*=position: fixed]').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6B7280;">×</button>
+                        <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #6B7280;">×</button>
                     </div>
                     ${html}
                 </div>
