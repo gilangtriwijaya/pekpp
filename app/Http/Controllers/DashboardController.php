@@ -209,7 +209,15 @@ class DashboardController extends Controller
                 $f03Stats = $this->getEffectiveF03StatsForUpp($periodeAktif->id, $upp->id, $targetResponden);
                 $f03Value = $f03Stats['response_count'] > 0 ? $f03Stats['effective_average'] : null;
 
-                if ($f02Value !== null || $f03Value !== null) {
+                $f02SebelumnyaValue = null;
+                if ($f01 && $f01->previous_f01_pengisian_id) {
+                    $f02Prev = F02Validasi::where('f01_pengisian_id', $f01->previous_f01_pengisian_id)
+                        ->where('status', 'selesai')
+                        ->first();
+                    $f02SebelumnyaValue = $f02Prev ? $f02Prev->total_nilai : null;
+                }
+
+                if ($f02Value !== null || $f03Value !== null || $f02SebelumnyaValue !== null) {
                     $f02Val = $f02Value ?? 0.0;
                     $f03Val = $f03Value ?? 0.0;
                     $ippScore = ($f02Val * 0.75) + ($f03Val * 0.25);
@@ -217,6 +225,7 @@ class DashboardController extends Controller
 
                     $hasilPenilaian = (object) [
                         'nilai_f02' => $f02Value,
+                        'nilai_f02_sebelumnya' => $f02SebelumnyaValue,
                         'nilai_f03' => $f03Value,
                         'nilai_ipp' => $ippScore,
                         'predikat' => $predData['label'],

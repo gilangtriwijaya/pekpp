@@ -18,6 +18,12 @@
                 </span>
                 <span class="text-slate-400 text-sm font-medium">/ 5.00</span>
             </div>
+            @if(isset($hasilPenilaian->nilai_f02_sebelumnya) && $hasilPenilaian->nilai_f02_sebelumnya !== null)
+            <div class="mt-1 flex items-center gap-1 text-xs text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 w-max">
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg>
+                <span>Skor Terakhir : <strong>{{ number_format($hasilPenilaian->nilai_f02_sebelumnya, 2) }}</strong></span>
+            </div>
+            @endif
             <p class="text-xs text-slate-400 mt-2">Skor rata-rata aspek terbobot dari validator</p>
         </div>
 
@@ -53,6 +59,22 @@
                     {{ $hasilPenilaian->predikat }}
                 </span>
             </div>
+            
+            <div class="mt-4 pt-3 border-t border-indigo-200/60 flex flex-col gap-1.5">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-indigo-800/80">Kontribusi F02 (75%)</span>
+                    <span class="font-bold text-indigo-900">{{ number_format(($hasilPenilaian->nilai_f02 ?? 0) * 0.75, 2) }}</span>
+                </div>
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-indigo-800/80">Kontribusi F03 (25%)</span>
+                    <span class="font-bold text-indigo-900">{{ number_format(($hasilPenilaian->nilai_f03 ?? 0) * 0.25, 2) }}</span>
+                </div>
+            </div>
+            @if(empty($hasilPenilaian->nilai_f02) || empty($hasilPenilaian->nilai_f03))
+            <div class="mt-3 text-indigo-800/70 leading-tight italic" style="font-size: 10px;">
+                *Nilai IPP saat ini belum final karena skor F02 dan/atau F03 masih kosong/belum tersedia.
+            </div>
+            @endif
         </div>
     </div>
 

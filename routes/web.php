@@ -160,7 +160,7 @@ Route::middleware(['auth'])->group(function () {
     // F03 Dashboard API
     Route::get('/f03/api/response/{pengisianId}', [\App\Http\Controllers\F03DashboardController::class, 'getResponseDetail'])->name('f03.api.response');
     Route::post('/f03/api/qr-code/{tokenId}', [\App\Http\Controllers\F03DashboardController::class, 'generateQrCodeApi'])->name('f03.api.qr-code');
-    Route::get('/f03/export/{tokenId}', [\App\Http\Controllers\F03DashboardController::class, 'exportCsv'])->name('f03.export');
+    Route::get('/f03/export/{tokenId}', [\App\Http\Controllers\F03DashboardController::class, 'exportExcel'])->name('f03.export');
 });
 
 Route::middleware(['auth'])->group(function() {

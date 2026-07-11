@@ -368,41 +368,14 @@ class F03DashboardController extends Controller
     }
 
     /**
-     * Export responses to CSV
+     * Export responses to Excel
      */
-    public function exportCsv($tokenId)
+    public function exportExcel($tokenId)
     {
-        $token = F03Token::findOrFail($tokenId);
-        $responses = $token->pengisian()->with('jawaban.indikator')->get();
-
-        $csv = "Tanggal,Indikator,Skor,Catatan,Response Text\n";
-
-        foreach ($responses as $response) {
-            foreach ($response->jawaban as $jawaban) {
-                // Determine the response value
-                $responseValue = '';
-                if ($jawaban->score !== null) {
-                    $responseValue = $jawaban->score;
-                } elseif ($jawaban->response_text !== null) {
-                    // If response_text is JSON (from checkbox), decode it
-                    $decoded = json_decode($jawaban->response_text, true);
-                    $responseValue = is_array($decoded) ? implode(', ', $decoded) : $jawaban->response_text;
-                }
-
-                $csv .= sprintf(
-                    '"%s","%s","%s","%s","%s"\n',
-                    $response->response_date->format('Y-m-d H:i:s'),
-                    str_replace('"', '""', $jawaban->indikator->pertanyaan ?? ''),
-                    $responseValue,
-                    str_replace('"', '""', $jawaban->catatan ?? ''),
-                    ''
-                );
-            }
-        }
-
-        return response($csv)
-            ->header('Content-Type', 'text/csv; charset=utf-8')
-            ->header('Content-Disposition', 'attachment; filename="f03_responses_' . $token->id . '.csv"');
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\F03ResponseExport($tokenId), 
+            'f03_responses_' . $tokenId . '.xlsx'
+        );
     }
 
     /**
