@@ -41,7 +41,6 @@ class DashboardAndPengumumanTest extends TestCase
 
         $upp = Upp::create([
             'nama' => 'UPP 1',
-            'status' => 'AKTIF',
             'aktif' => 1
         ]);
 
@@ -83,7 +82,6 @@ class DashboardAndPengumumanTest extends TestCase
     {
         $upp = Upp::create([
             'nama' => 'UPP 1',
-            'status' => 'AKTIF',
             'aktif' => 1
         ]);
 

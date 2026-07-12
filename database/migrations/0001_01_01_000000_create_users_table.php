@@ -13,11 +13,11 @@ return new class extends Migration
     {
         Schema::create('users', function (Blueprint $table) {
             $table->id();
-            $table->string('name');
+            $table->string('name')->nullable(); // Legacy column; replaced by `nama` via later migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
-            $table->string('password');
-            $table->rememberToken();
+            $table->string('password')->nullable(); // Legacy; dropped via refactor migration on MySQL/Postgres
+            $table->rememberToken(); // nullable by default
             $table->timestamps();
         });
 
