@@ -124,6 +124,46 @@
             }
         });
 
+        // Legend items definition
+        const legendItems = [
+            { color: 'rgba(203, 213, 225, 0.85)', border: 'rgba(148, 163, 184, 1)', label: 'Belum Mulai' },
+            { color: 'rgba(251, 191, 36, 0.85)',  border: 'rgba(217, 119, 6, 1)',   label: 'Sedang Mengisi' },
+            { color: 'rgba(59, 130, 246, 0.85)',  border: 'rgba(29, 78, 216, 1)',   label: 'Menunggu Validasi' },
+            { color: 'rgba(16, 185, 129, 0.85)',  border: 'rgba(4, 120, 87, 1)',    label: 'Selesai' },
+        ];
+
+        // Draw legend on canvas context
+        function drawLegendOnCanvas(tCtx, canvasWidth, yStart, dpr) {
+            // Ukuran absolut (px) — tidak dikalikan dpr agar proporsional di resolusi tinggi
+            const boxSize     = 14;
+            const gap         = 6;
+            const fontSize    = 11;
+            const itemSpacing = 120;
+
+            tCtx.font = `${fontSize}px sans-serif`;
+            const totalWidth = legendItems.length * itemSpacing - gap;
+            let x = (canvasWidth - totalWidth) / 2;
+            const y = yStart;
+
+            legendItems.forEach(item => {
+                // Draw colored box
+                tCtx.fillStyle = item.color;
+                tCtx.strokeStyle = item.border;
+                tCtx.lineWidth = 1;
+                tCtx.beginPath();
+                tCtx.roundRect(x, y - boxSize + 2, boxSize, boxSize, 2);
+                tCtx.fill();
+                tCtx.stroke();
+
+                // Draw label
+                tCtx.fillStyle = '#334155';
+                tCtx.textAlign = 'left';
+                tCtx.fillText(item.label, x + boxSize + gap * 0.6, y);
+
+                x += itemSpacing;
+            });
+        }
+
         function getHighResImage(format, callback) {
             // Get original options
             const originalRatio = chartInstance.options.devicePixelRatio || window.devicePixelRatio;
@@ -145,7 +185,7 @@
                 
                 if (format === 'jpg') {
                     paddingTop = 110 * dpr;
-                    paddingBottom = 60 * dpr;
+                    paddingBottom = 80 * dpr;  // extra space for legend + footer
                 }
                 
                 tempCanvas.width = canvas.width;
@@ -174,13 +214,25 @@
                 tCtx.drawImage(canvas, 0, paddingTop);
                 
                 if (format === 'jpg') {
+                    // Draw separator line above legend
+                    const sepY = canvas.height + paddingTop + 18 * dpr;
+                    tCtx.strokeStyle = '#e2e8f0';
+                    tCtx.lineWidth = 1.5;
+                    tCtx.beginPath();
+                    tCtx.moveTo(20 * dpr, sepY);
+                    tCtx.lineTo(tempCanvas.width - 20 * dpr, sepY);
+                    tCtx.stroke();
+
+                    // Draw legend
+                    drawLegendOnCanvas(tCtx, tempCanvas.width, sepY + 32 * dpr, dpr);
+
                     const maxWidth = tempCanvas.width - (40 * dpr);
                     // Draw footer
                     tCtx.fillStyle = '#94a3b8';
                     tCtx.font = `${12 * dpr}px sans-serif`;
                     tCtx.textAlign = 'center';
                     const dateStr = new Date().toLocaleString('id-ID');
-                    tCtx.fillText(`Dokumen ini diunduh secara resmi dari Aplikasi LAYANI Mandiri SISTAGOR pada ${dateStr}`, tempCanvas.width / 2, tempCanvas.height - (25 * dpr), maxWidth);
+                    tCtx.fillText(`Dokumen ini diunduh secara resmi dari Aplikasi LAYANI Mandiri SISTAGOR pada ${dateStr}`, tempCanvas.width / 2, tempCanvas.height - (18 * dpr), maxWidth);
                 }
                 
                 const imgData = tempCanvas.toDataURL('image/jpeg', 1.0);
@@ -274,6 +326,41 @@
                         pdf.setFont("helvetica", "normal");
                         pdf.setTextColor(100, 116, 139); // slate-500
                         pdf.text('Persentase penyelesaian pengisian formulir mandiri F01 untuk seluruh UPP', pdfWidth / 2, margin + 12, { align: 'center' });
+                    }
+
+                    // Draw legend on last page (or page 1 if only 1 page)
+                    if (remainingHeight - (pdfHeight - yPos - footerHeight) <= 0) {
+                        const legendColors = [
+                            { r: 203, g: 213, b: 225, label: 'Belum Mulai' },
+                            { r: 251, g: 191, b: 36,  label: 'Sedang Mengisi' },
+                            { r: 59,  g: 130, b: 246, label: 'Menunggu Validasi' },
+                            { r: 16,  g: 185, b: 129, label: 'Selesai' },
+                        ];
+                        const legendY = pdfHeight - footerHeight - 10;
+                        const boxW = 4;
+                        const boxH = 3;
+                        const itemW = 38;
+                        const totalLegendW = legendColors.length * itemW - 2;
+                        let lx = (pdfWidth - totalLegendW) / 2;
+
+                        // Separator line
+                        pdf.setDrawColor(226, 232, 240);
+                        pdf.setLineWidth(0.3);
+                        pdf.line(margin, legendY - 6, pdfWidth - margin, legendY - 6);
+
+                        legendColors.forEach(item => {
+                            pdf.setFillColor(item.r, item.g, item.b);
+                            pdf.setDrawColor(item.r * 0.7, item.g * 0.7, item.b * 0.7);
+                            pdf.setLineWidth(0.3);
+                            pdf.roundedRect(lx, legendY - boxH, boxW, boxH, 0.5, 0.5, 'FD');
+
+                            pdf.setFontSize(7);
+                            pdf.setFont("helvetica", "normal");
+                            pdf.setTextColor(51, 65, 85);
+                            pdf.text(item.label, lx + boxW + 1.5, legendY - 0.3);
+
+                            lx += itemW;
+                        });
                     }
                     
                     // Draw Footer on every page
