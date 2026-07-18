@@ -97,6 +97,7 @@
       $isF01Active = $isActive('admin/f01') || $isActive('f01');
       $isF02Active = $isActive('admin/f02') || $isActive('f02');
       $isF03Active = $isActive('admin/f03') || $isActive('f03');
+      $isPendataanActive = $isActive('admin/pendataan') || $isActive('pendataan');
       $isPeriodeActive = $isActive('admin/periode');
       $isUppActive = $isActive('user-upp');
 
@@ -296,6 +297,41 @@
             <a href="{{ url('/admin/f03/dashboard') }}" class="nav-item {{ $isActive('admin/f03/dashboard') ? 'active' : '' }}" title="Admin Dashboard F03">
               <span class="nav-icon">{!! $sidebarIcon('analytics') !!}</span>
               <span class="label">Dashboard Admin F03</span>
+            </a>
+          </div>
+        </div>
+      @endif
+      
+      {{-- PENDATAAN MANAGEMENT --}}
+      @if($isAdminUpp)
+        <div class="nav-section">
+          <a href="{{ route('pendataan.index') }}" class="nav-item {{ $isActive('pendataan') ? 'active' : '' }}" title="Pendataan UPP">
+            <span class="nav-icon">{!! $sidebarIcon('document') !!}</span>
+            <span class="label">Pendataan</span>
+          </a>
+        </div>
+      @elseif($isSuperadmin || $isAdminOrganisasi)
+        <div class="nav-section accordion-section {{ $isPendataanActive ? 'expanded' : '' }}" data-section="pendataan">
+          <button class="nav-section-title accordion-toggle" type="button" aria-expanded="{{ $isPendataanActive ? 'true' : 'false' }}">
+            <span class="accordion-content"><span class="accordion-icon">{!! $sidebarIcon('document') !!}</span> <span>Setup Pendataan</span></span>
+            <svg class="accordion-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <div class="accordion-items">
+            <a href="{{ url('/admin/pendataan/aspek') }}" class="nav-item {{ $isActive('admin/pendataan/aspek') ? 'active' : '' }}" title="Kelola Aspek Pendataan">
+              <span class="nav-icon">{!! $sidebarIcon('layers') !!}</span>
+              <span class="label">Aspek Pendataan</span>
+            </a>
+
+            <a href="{{ url('/admin/pendataan/pertanyaan') }}" class="nav-item {{ $isActive('admin/pendataan/pertanyaan') ? 'active' : '' }}" title="Kelola Pertanyaan Pendataan">
+              <span class="nav-icon">{!! $sidebarIcon('target') !!}</span>
+              <span class="label">Pertanyaan Pendataan</span>
+            </a>
+
+            <a href="{{ url('/admin/pendataan/pengisian') }}" class="nav-item {{ $isActive('admin/pendataan/pengisian') ? 'active' : '' }}" title="Hasil Pendataan">
+              <span class="nav-icon">{!! $sidebarIcon('search') !!}</span>
+              <span class="label">Hasil Pendataan</span>
             </a>
           </div>
         </div>

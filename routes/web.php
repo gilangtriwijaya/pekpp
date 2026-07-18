@@ -163,6 +163,35 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/f03/export/{tokenId}', [\App\Http\Controllers\F03DashboardController::class, 'exportExcel'])->name('f03.export');
 });
 
+// Pendataan Routes (Evaluasi UPP)
+Route::middleware(['auth'])->prefix('pendataan')->name('pendataan.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\PendataanController::class, 'index'])->name('index');
+    Route::get('/{pengisianId}/aspek', [\App\Http\Controllers\PendataanController::class, 'aspekList'])->name('aspek-list')->where('pengisianId', '[0-9]+');
+    Route::get('/{pengisianId}/aspek/{aspekId}/detail', [\App\Http\Controllers\PendataanController::class, 'showAspekDetail'])->name('aspek.detail')->where(['pengisianId' => '[0-9]+', 'aspekId' => '[0-9]+']);
+    Route::post('/{pengisianId}/auto-save', [\App\Http\Controllers\PendataanController::class, 'autoSave'])->name('auto-save')->where('pengisianId', '[0-9]+');
+    Route::post('/{pengisianId}/upload-bukti', [\App\Http\Controllers\PendataanController::class, 'uploadBukti'])->name('upload-bukti')->where('pengisianId', '[0-9]+');
+    Route::post('/{pengisianId}/submit', [\App\Http\Controllers\PendataanController::class, 'submit'])->name('submit')->where('pengisianId', '[0-9]+');
+    Route::get('/api/{pengisianId}/form-data', [\App\Http\Controllers\PendataanController::class, 'getFormData'])->name('api.form-data')->where('pengisianId', '[0-9]+');
+});
+
+// Admin Pendataan Routes
+Route::middleware(['auth'])->prefix('admin/pendataan')->name('admin.pendataan.')->group(function () {
+    // Aspek
+    Route::get('aspek', [\App\Http\Controllers\PendataanAspekController::class, 'index'])->name('aspek.index');
+    Route::post('aspek', [\App\Http\Controllers\PendataanAspekController::class, 'store'])->name('aspek.store');
+    Route::put('aspek/{id}', [\App\Http\Controllers\PendataanAspekController::class, 'update'])->name('aspek.update');
+    Route::delete('aspek/{id}', [\App\Http\Controllers\PendataanAspekController::class, 'destroy'])->name('aspek.destroy');
+    
+    // Pertanyaan
+    Route::get('pertanyaan', [\App\Http\Controllers\PendataanPertanyaanController::class, 'index'])->name('pertanyaan.index');
+    Route::post('pertanyaan', [\App\Http\Controllers\PendataanPertanyaanController::class, 'store'])->name('pertanyaan.store');
+    Route::put('pertanyaan/{id}', [\App\Http\Controllers\PendataanPertanyaanController::class, 'update'])->name('pertanyaan.update');
+    Route::delete('pertanyaan/{id}', [\App\Http\Controllers\PendataanPertanyaanController::class, 'destroy'])->name('pertanyaan.destroy');
+    
+    // Pengisian
+    Route::get('pengisian', [\App\Http\Controllers\AdminPendataanPengisianController::class, 'index'])->name('pengisian.index');
+});
+
 Route::middleware(['auth'])->group(function() {
     // Impersonate routes (superadmin only)
     Route::controller(\App\Http\Controllers\ImpersonateController::class)->group(function () {
