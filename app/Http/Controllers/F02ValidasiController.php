@@ -164,14 +164,8 @@ class F02ValidasiController extends Controller
     {
         $pengisian = F01Pengisian::findOrFail($id);
         
-        // Load atau create F02 validasi
-        $f02 = F02Validasi::firstOrCreate(
-            ['f01_pengisian_id' => $pengisian->id],
-            [
-                'periode_id' => $pengisian->periode_id,
-                'status' => 'draft'
-            ]
-        );
+        // Load atau create F02 validasi (dengan carry-over logic untuk resubmit)
+        $f02 = $this->resubmitService->autoCreateF02($pengisian);
         
         // Redirect to aspek-list
         return redirect()->route('f02.aspek-list', ['validasi' => $f02->id]);
