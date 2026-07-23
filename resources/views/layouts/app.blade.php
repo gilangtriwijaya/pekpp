@@ -25,8 +25,9 @@
     {{-- Chart.js Library --}}
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 
-    {{-- Alpine.js v3 via CDN (defer ensures DOM is ready before init) --}}
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js"></script>
+    {{-- NOTE: Alpine.js is bundled by Livewire 4 via @livewireScripts below.
+         Do NOT load Alpine separately — duplicate instances break Alpine.transaction
+         and cause "Detected multiple instances of Alpine" errors. --}}
 
     {{-- Stack for page-specific styles --}}
     @stack('styles')
